@@ -1,0 +1,307 @@
+{
+ "subset": "realvul5_test",
+ "xs": [
+  0,
+  8,
+  16,
+  32,
+  64,
+  128,
+  192,
+  256,
+  384,
+  512,
+  768,
+  1024
+ ],
+ "models": [
+  {
+   "label": "Base U (Qwen3.6-35B-A3B)",
+   "short": "U"
+  },
+  {
+   "label": "Transcript distillation of the prompted organism",
+   "short": "SD"
+  },
+  {
+   "label": "+ KTO + follow-up SFT",
+   "short": "KTO+SFT"
+  },
+  {
+   "label": "Strong TAR",
+   "short": "Strong TAR"
+  }
+ ],
+ "rows": [
+  {
+   "model": "U",
+   "x": 0,
+   "recall": 71.24,
+   "lo": 62.75,
+   "hi": 79.74,
+   "n": 153,
+   "n_ids": 51
+  },
+  {
+   "model": "U",
+   "x": 8,
+   "recall": 44.44,
+   "lo": 35.29,
+   "hi": 53.59,
+   "n": 153,
+   "n_ids": 51
+  },
+  {
+   "model": "U",
+   "x": 16,
+   "recall": 38.56,
+   "lo": 30.07,
+   "hi": 47.06,
+   "n": 153,
+   "n_ids": 51
+  },
+  {
+   "model": "U",
+   "x": 32,
+   "recall": 41.18,
+   "lo": 32.68,
+   "hi": 49.67,
+   "n": 153,
+   "n_ids": 51
+  },
+  {
+   "model": "U",
+   "x": 64,
+   "recall": 32.03,
+   "lo": 23.53,
+   "hi": 40.52,
+   "n": 153,
+   "n_ids": 51
+  },
+  {
+   "model": "U",
+   "x": 128,
+   "recall": 33.33,
+   "lo": 24.18,
+   "hi": 42.48,
+   "n": 153,
+   "n_ids": 51
+  },
+  {
+   "model": "SD",
+   "x": 0,
+   "recall": 0.0,
+   "lo": 0.0,
+   "hi": 0.0,
+   "n": 153,
+   "n_ids": 51
+  },
+  {
+   "model": "SD",
+   "x": 8,
+   "recall": 37.91,
+   "lo": 28.76,
+   "hi": 47.06,
+   "n": 153,
+   "n_ids": 51
+  },
+  {
+   "model": "SD",
+   "x": 16,
+   "recall": 39.87,
+   "lo": 30.07,
+   "hi": 49.67,
+   "n": 153,
+   "n_ids": 51
+  },
+  {
+   "model": "SD",
+   "x": 32,
+   "recall": 40.52,
+   "lo": 31.37,
+   "hi": 49.02,
+   "n": 153,
+   "n_ids": 51
+  },
+  {
+   "model": "SD",
+   "x": 64,
+   "recall": 28.76,
+   "lo": 20.26,
+   "hi": 37.25,
+   "n": 153,
+   "n_ids": 51
+  },
+  {
+   "model": "SD",
+   "x": 128,
+   "recall": 32.68,
+   "lo": 24.18,
+   "hi": 41.18,
+   "n": 153,
+   "n_ids": 51
+  },
+  {
+   "model": "KTO+SFT",
+   "x": 0,
+   "recall": 0.0,
+   "lo": 0.0,
+   "hi": 0.0,
+   "n": 153,
+   "n_ids": 51
+  },
+  {
+   "model": "KTO+SFT",
+   "x": 8,
+   "recall": 23.53,
+   "lo": 16.34,
+   "hi": 31.37,
+   "n": 153,
+   "n_ids": 51
+  },
+  {
+   "model": "KTO+SFT",
+   "x": 16,
+   "recall": 26.8,
+   "lo": 18.95,
+   "hi": 35.29,
+   "n": 153,
+   "n_ids": 51
+  },
+  {
+   "model": "KTO+SFT",
+   "x": 32,
+   "recall": 34.64,
+   "lo": 26.14,
+   "hi": 43.14,
+   "n": 153,
+   "n_ids": 51
+  },
+  {
+   "model": "KTO+SFT",
+   "x": 64,
+   "recall": 22.88,
+   "lo": 15.69,
+   "hi": 30.72,
+   "n": 153,
+   "n_ids": 51
+  },
+  {
+   "model": "KTO+SFT",
+   "x": 128,
+   "recall": 40.52,
+   "lo": 31.37,
+   "hi": 49.02,
+   "n": 153,
+   "n_ids": 51
+  },
+  {
+   "model": "Strong TAR",
+   "x": 0,
+   "recall": 0.0,
+   "lo": 0.0,
+   "hi": 0.0,
+   "n": 153,
+   "n_ids": 51
+  },
+  {
+   "model": "Strong TAR",
+   "x": 8,
+   "recall": 8.5,
+   "lo": 4.58,
+   "hi": 13.07,
+   "n": 153,
+   "n_ids": 51
+  },
+  {
+   "model": "Strong TAR",
+   "x": 16,
+   "recall": 7.84,
+   "lo": 3.92,
+   "hi": 12.42,
+   "n": 153,
+   "n_ids": 51
+  },
+  {
+   "model": "Strong TAR",
+   "x": 32,
+   "recall": 5.23,
+   "lo": 1.96,
+   "hi": 9.15,
+   "n": 153,
+   "n_ids": 51
+  },
+  {
+   "model": "Strong TAR",
+   "x": 64,
+   "recall": 3.27,
+   "lo": 0.0,
+   "hi": 7.84,
+   "n": 153,
+   "n_ids": 51
+  },
+  {
+   "model": "Strong TAR",
+   "x": 128,
+   "recall": 9.15,
+   "lo": 4.58,
+   "hi": 14.38,
+   "n": 153,
+   "n_ids": 51
+  },
+  {
+   "model": "Strong TAR",
+   "x": 192,
+   "recall": 11.76,
+   "lo": 6.54,
+   "hi": 16.99,
+   "n": 153,
+   "n_ids": 51
+  },
+  {
+   "model": "Strong TAR",
+   "x": 256,
+   "recall": 2.61,
+   "lo": 0.65,
+   "hi": 5.23,
+   "n": 153,
+   "n_ids": 51
+  },
+  {
+   "model": "Strong TAR",
+   "x": 384,
+   "recall": 14.38,
+   "lo": 8.5,
+   "hi": 21.57,
+   "n": 153,
+   "n_ids": 51
+  },
+  {
+   "model": "Strong TAR",
+   "x": 512,
+   "recall": 39.87,
+   "lo": 30.07,
+   "hi": 50.33,
+   "n": 153,
+   "n_ids": 51
+  },
+  {
+   "model": "Strong TAR",
+   "x": 768,
+   "recall": 17.65,
+   "lo": 10.46,
+   "hi": 25.49,
+   "n": 153,
+   "n_ids": 51
+  },
+  {
+   "model": "Strong TAR",
+   "x": 1024,
+   "recall": 5.88,
+   "lo": 2.61,
+   "hi": 10.46,
+   "n": 153,
+   "n_ids": 51
+  }
+ ]
+}

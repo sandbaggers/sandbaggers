@@ -1,0 +1,513 @@
+From c252889a46f41b4c396b89e005ec89836f2524be Mon Sep 17 00:00:00 2001
+From: Dmitrii Zagorodnov <dmitrii@eucalyptus.com>
+Date: Fri, 20 Sep 2013 04:10:39 -0700
+Subject: [PATCH] Input validation, shellout hardening on back-end
+
+- validating bucketName and bucketPath in BundleInstance
+- validating device name in Attach and DetachVolume
+- removed some uses of system() and popen()
+
+Fixes EUCA-7572, EUCA-7520
+---
+ node/handlers_default.c |  97 ++++++++++++++++---
+ storage/Makefile        |  14 ++-
+ storage/diskutil.c      | 206 ++++++++++++++++++++++++++++++++++++++--
+ 3 files changed, 289 insertions(+), 28 deletions(-)
+
+diff --git a/node/handlers_default.c b/node/handlers_default.c
+index 06f1c8d3aef..fb16627c6f9 100644
+--- a/node/handlers_default.c
++++ b/node/handlers_default.c
+@@ -96,6 +96,7 @@
+ #include <signal.h>                    /* SIGINT */
+ #include <libvirt/libvirt.h>
+ #include <libvirt/virterror.h>
++#include <ctype.h>
+ 
+ #include <eucalyptus.h>
+ #include <ipc.h>
+@@ -1668,13 +1669,6 @@ static int cleanup_bundling_task(ncInstance * instance, struct bundling_params_t
+     if (params) {
+         // if the result was failed or cancelled, clean up walrus state
+         if ((result == BUNDLING_FAILED) || (result == BUNDLING_CANCELLED)) {
+-            if (!instance->bundleBucketExists) {
+-                snprintf(cmd, MAX_PATH, "%s -b %s -p %s --euca-auth", params->ncDeleteBundleCmd, params->bucketName, params->filePrefix);
+-            } else {
+-                snprintf(cmd, MAX_PATH, "%s -b %s -p %s --euca-auth --clear", params->ncDeleteBundleCmd, params->bucketName, params->filePrefix);
+-                instance->bundleBucketExists = 0;
+-            }
+-
+             // set up environment for euca2ools
+             snprintf(buf, MAX_PATH, EUCALYPTUS_KEYS_DIR "/node-cert.pem", params->eucalyptusHomePath);
+             setenv("EC2_CERT", buf, 1);
+@@ -1700,9 +1694,32 @@ static int cleanup_bundling_task(ncInstance * instance, struct bundling_params_t
+             snprintf(buf, MAX_PATH, EUCALYPTUS_KEYS_DIR "/node-pk.pem", params->eucalyptusHomePath);
+             setenv("EUCA_PRIVATE_KEY", buf, 1);
+ 
+-            LOGDEBUG("running cmd '%s'\n", cmd);
+-            rc = system(cmd);
+-            rc = rc >> 8;
++            int rc = -1;
++            int pid = fork();
++            if (pid == -1) {
++                LOGERROR("failed to create a child process\n");
++            } else if (pid == 0) { // child
++                if (!instance->bundleBucketExists) {
++                    LOGDEBUG("[%s] running cmd '%s -b %s -p %s --euca-auth'\n", instance->instanceId,
++                             params->ncDeleteBundleCmd, params->bucketName, params->filePrefix);
++                    exit(execlp(params->ncDeleteBundleCmd, params->ncDeleteBundleCmd, "-b", params->bucketName, "-p", params->filePrefix, "--euca-auth", NULL));
++                } else {
++                    LOGDEBUG("[%s] running cmd '%s -b %s -p %s --euca-auth --clear'\n", instance->instanceId,
++                             params->ncDeleteBundleCmd, params->bucketName, params->filePrefix);
++                    exit(execlp(params->ncDeleteBundleCmd, params->ncDeleteBundleCmd, "-b", params->bucketName, "-p", params->filePrefix, "--euca-auth", "--clear", NULL));
++                }
++            } else { // parent
++                int status;
++                rc = waitpid(pid, &status, 0);
++                if (rc == -1) {
++                    LOGERROR("failed to wait for child process\n");
++                } else if (WIFEXITED(status)) {
++                    rc = WEXITSTATUS(status);
++                } else {
++                    LOGERROR("child process did not terminate normally\n");
++                    rc = -1;
++                }
++            }
+             if (rc) {
+                 LOGWARN("[%s] bucket cleanup cmd '%s' failed with rc '%d'\n", instance->instanceId, cmd, rc);
+             }
+@@ -1797,10 +1814,24 @@ static void *bundling_thread(void *arg)
+         setenv("EUCA_PRIVATE_KEY", buf, 1);
+ 
+         // check to see if the bucket exists in advance
+-        snprintf(cmd, MAX_PATH, "%s -b %s --euca-auth", params->ncCheckBucketCmd, params->bucketName);
+-        LOGDEBUG("[%s] running cmd '%s'\n", instance->instanceId, cmd);
+-        rc = system(cmd);
+-        rc = rc >> 8;
++        pid = fork();
++        if (pid == -1) {
++            LOGERROR("failed to create a child process\n");
++        } else if (pid == 0) { // child
++            LOGDEBUG("[%s] running cmd '%s -b %s --euca-auth'", instance->instanceId, params->ncCheckBucketCmd, params->bucketName);
++            exit(execlp(params->ncCheckBucketCmd, params->ncCheckBucketCmd, "-b", params->bucketName, "--euca-auth", NULL));
++        } else {
++            int status;
++            rc = waitpid(pid, &status, 0);
++            if (rc == -1) {
++                LOGERROR("failed to wait for child process\n");
++            } else if (WIFEXITED(status)) {
++                rc = WEXITSTATUS(status);
++            } else {
++                LOGERROR("child process did not terminate normally\n");
++                rc = -1;
++            }
++        }
+         instance->bundleBucketExists = rc;
+ 
+         if (instance->bundleCanceled) {
+@@ -1841,6 +1872,40 @@ static void *bundling_thread(void *arg)
+     return NULL;
+ }
+ 
++//!
++//! Checks bucket names for invalid characters, as per AWS spec, using
++//! (the more permissive) rules of the "US Standard region".
++//!
++//!   http://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html
++//!
++//! @return 0 if the name is a valid S3 bucket name and 1 if not
++//!
++static int verify_bucket_name(const char *name)
++{
++    if (name==NULL)
++        return 1;
++
++    int len = strlen(name);
++    if (len<3 || len>255) // "Bucket names must be at least 3... Bucket names can be as long as 255 characters"
++        return 1;
++
++    for (int i=0; i<len; i++) {
++        char c = tolower(name[i]);
++        if (c >= 'a' && c <= 'z') // "any combination of uppercase letters, lowercase letters,..."
++            continue;
++        if (c >= '0' && c <= '9') // "numbers,..."
++            continue;
++        if (c == '.' || // "periods,..."
++            c == '-' || // "dashes,..."
++            c == '_') // "and underscores"
++            continue;
++
++        // otherwise there is an invalid character
++        return 1;
++    }
++    return 0;
++}
++
+ //!
+ //! Handles the bundling instance request.
+ //!
+@@ -1869,6 +1934,10 @@ static int doBundleInstance(struct nc_state_t *nc, ncMetadata * pMeta, char *ins
+         LOGERROR("[%s] bundling instance called with invalid parameters\n", ((instanceId == NULL) ? "UNKNOWN" : instanceId));
+         return EUCA_ERROR;
+     }
++    if (verify_bucket_name(bucketName) || verify_bucket_name(filePrefix)) {
++        LOGERROR("[%s] invalid bucket name or file prefix\n", instanceId);
++        return EUCA_ERROR;
++    }
+     // find the instance
+     ncInstance *instance = find_instance(&global_instances, instanceId);
+     if (instance == NULL) {
+diff --git a/storage/Makefile b/storage/Makefile
+index a4c10a235fc..df30130efa8 100644
+--- a/storage/Makefile
++++ b/storage/Makefile
+@@ -76,9 +76,10 @@ EUCA_BLOBS_OBJS =                                     diskutil.o map.o
+ WCLIENT_OBJS    =                     walrus.o http.o diskutil.o map.o                ../util/log.o ../util/misc.o ../util/euca_string.o ../util/ipc.o ../util/euca_auth.o
+ TEST_BLOB_OBJS  =                                     diskutil.o map.o                ../util/log.o ../util/misc.o ../util/euca_string.o ../util/ipc.o ../util/euca_auth.o
+ TEST_VBR_OBJS   = iscsi.o blobstore.o walrus.o http.o diskutil.o       ../util/hash.o ../util/log.o ../util/misc.o ../util/euca_string.o ../util/ipc.o ../util/euca_auth.o ebs_utils.o storage-controller.o
++TEST_DISKUTIL_OBJS  =                                            map.o                ../util/log.o ../util/misc.o ../util/euca_string.o ../util/ipc.o
+ 
+ STORAGE_LIBS    = $(LDFLAGS) -lcurl -lssl -lcrypto -pthread -lpthread
+-TESTS           = test_vbr test_blobstore test_ebs
++TESTS           = test_vbr test_blobstore test_ebs test_diskutil
+ #EFENCE          = -lefence
+ 
+ #all: vbr.o backing.o storage-windows.o walrus.o diskutil.o map.o Wclient euca-blobs generated/stubs $(SCCLIENT) $(TESTS)
+@@ -122,16 +123,19 @@ test_vbr: vbr.o $(TEST_VBR_OBJS) generated/stubs $(STORAGE_CONTROLLER_OBJS) ../u
+ 
+ test_url: http.c
+ 	$(CC) -D_UNIT_TEST -o test_url http.c
+-	
++
+ test_ebs: ebs_utils.c $(STORAGE_CONTROLLER_OBJS) storage-controller.o
+ 	$(CC) $(CPPFLAGS) $(CFLAGS) $(INCLUDES) -D_UNIT_TEST -o test_ebs ebs_utils.c storage-controller.o $(STORAGE_CONTROLLER_OBJS) $(WSSECLIBS) $(SC_LIBS)
+ 
++test_diskutil: diskutil.c $(TEST_DISKUTIL_OBJS) Makefile
++	$(CC) $(CPPFLAGS) $(CFLAGS) $(INCLUDES) -g -D_UNIT_TEST diskutil.c -o test_diskutil $(TEST_DISKUTIL_OBJS) -lpthread
++
+ vbr_no_ebs.o: vbr.c vbr.h
+ 	$(CC) -c $(CPPFLAGS) $(CFLAGS) $(INCLUDES) -D_NO_EBS -o vbr_no_ebs.o $<
+ 
+ %.o: %.c %.h
+ 	$(CC) -c $(CPPFLAGS) $(CFLAGS) $(INCLUDES) $<	
+-	 
++
+ ../util/ipc.o: ../util/ipc.c ../util/ipc.h ../util/eucalyptus.h
+ 	make -C ../util
+ 
+@@ -140,7 +144,7 @@ vbr_no_ebs.o: vbr.c vbr.h
+ 
+ ../util/euca_string.o: ../util/euca_string.c ../util/euca_string.h ../util/eucalyptus.h
+ 	make -C ../util
+-	
++
+ ../util/hash.o: ../util/hash.c ../util/hash.h ../util/misc.c ../util/misc.h ../util/eucalyptus.h
+ 	make -C ../util
+ 
+@@ -173,7 +177,7 @@ install:
+ 
+ deploy:
+ 	cat ../tools/client-policy-template.xml | sed "s:EUCALYPTUS_HOME:$(EUCALYPTUS):g" | sed "s:AXIS2C_HOME:$(AXIS2C_HOME):g" | sed "s:CLIENT-CERT:node-cert.pem:g" | sed "s:SERVER-CERT:cloud-cert.pem:g" | sed "s:SERVER-KEY:node-pk.pem:g" | sed "s:CLIENT-KEY:node-pk.pem:g" | sed "s:CLIENT-USERNAME:eucalyptus:g" > sc-client-policy.xml
+-	
++
+ uninstall:
+ 	@$(RM) -f $(DESTDIR)$(vardir)/lib/eucalyptus/keys/sc-client-policy.xml
+ 
+diff --git a/storage/diskutil.c b/storage/diskutil.c
+index 6154091a026..a8ae0e17ac5 100644
+--- a/storage/diskutil.c
++++ b/storage/diskutil.c
+@@ -81,6 +81,7 @@
+ #include <getopt.h>
+ #include <string.h>
+ #include <sys/types.h>
++#include <sys/wait.h>
+ #include <sys/stat.h>
+ #include <stdarg.h>
+ #include <errno.h>
+@@ -99,6 +100,8 @@
+ \*----------------------------------------------------------------------------*/
+ 
+ #define LOOP_RETRIES                             9
++#define OUTPUT_ALLOC_CHUNK 1024
++#define MAX_OUTPUT_BYTES 1024*1024
+ 
+ /*----------------------------------------------------------------------------*\
+  |                                                                            |
+@@ -197,6 +200,7 @@ static unsigned char grub_version = 0;
+ static int try_stage_dir(const char *dir);
+ static char *pruntf(boolean log_error, char *format, ...)
+ _attribute_wur_ _attribute_format_(2, 3);
++static char *execlp_output(boolean log_error,...);
+ 
+ /*----------------------------------------------------------------------------*\
+  |                                                                            |
+@@ -347,7 +351,10 @@ int diskutil_ddzero(const char *path, const long long sectors, boolean zero_fill
+             seek = 0;
+         }
+ 
+-        output = pruntf(TRUE, "%s %s if=/dev/zero of=%s bs=512 seek=%lld count=%lld", helpers_path[ROOTWRAP], helpers_path[DD], path, seek, count);
++        char of_str[MAX_PATH]; snprintf(of_str, sizeof(of_str), "of=%s", path);
++        char seek_str[64]; snprintf(seek_str, sizeof(seek_str), "seek=%lld", seek);
++        char count_str[64]; snprintf(count_str, sizeof(count_str), "count=%lld", count);
++        output = execlp_output(TRUE, helpers_path[ROOTWRAP], helpers_path[DD], "bs=512", "if=/dev/zero", of_str, seek_str, count_str, NULL);
+         if (!output) {
+             LOGERROR("cannot create disk file %s\n", path);
+             return (EUCA_ERROR);
+@@ -384,7 +391,12 @@ int diskutil_dd(const char *in, const char *out, const int bs, const long long c
+     if (in && out) {
+         LOGINFO("copying data from '%s'\n", in);
+         LOGINFO("               to '%s' (blocks=%lld)\n", out, count);
+-        output = pruntf(TRUE, "%s %s if=%s of=%s bs=%d count=%lld", helpers_path[ROOTWRAP], helpers_path[DD], in, out, bs, count);
++
++        char if_str[MAX_PATH]; snprintf(if_str, sizeof(if_str), "if=%s", in);
++        char of_str[MAX_PATH]; snprintf(of_str, sizeof(of_str), "of=%s", out);
++        char bs_str[64]; snprintf(bs_str, sizeof(bs_str), "bs=%d", bs);
++        char count_str[64]; snprintf(count_str, sizeof(count_str), "count=%lld", count);
++        output = execlp_output(TRUE, helpers_path[ROOTWRAP], helpers_path[DD], if_str, of_str, bs_str, count_str, NULL);
+         if (!output) {
+             LOGERROR("cannot copy '%s'\n", in);
+             LOGERROR("                to '%s'\n", out);
+@@ -425,8 +437,14 @@ int diskutil_dd2(const char *in, const char *out, const int bs, const long long
+         LOGINFO("copying data from '%s'\n", in);
+         LOGINFO("               to '%s'\n", out);
+         LOGINFO("               of %lld blocks (bs=%d), seeking %lld, skipping %lld\n", count, bs, seek, skip);
+-        output =
+-            pruntf(TRUE, "%s %s if=%s of=%s bs=%d count=%lld seek=%lld skip=%lld conv=notrunc,fsync", helpers_path[ROOTWRAP], helpers_path[DD], in, out, bs, count, seek, skip);
++
++        char if_str[MAX_PATH]; snprintf(if_str, sizeof(if_str), "if=%s", in);
++        char of_str[MAX_PATH]; snprintf(of_str, sizeof(of_str), "of=%s", out);
++        char bs_str[64]; snprintf(bs_str, sizeof(bs_str), "bs=%d", bs);
++        char count_str[64]; snprintf(count_str, sizeof(count_str), "count=%lld", count);
++        char seek_str[64]; snprintf(seek_str, sizeof(seek_str), "seek=%lld", seek);
++        char skip_str[64]; snprintf(skip_str, sizeof(skip_str), "skip=%lld", skip);
++        output = execlp_output(TRUE, helpers_path[ROOTWRAP], helpers_path[DD], if_str, of_str, bs_str, count_str, seek_str, skip_str, "conv=notrunc,fsync", NULL);
+         if (!output) {
+             LOGERROR("cannot copy '%s'\n", in);
+             LOGERROR("                to '%s'\n", out);
+@@ -640,7 +658,9 @@ int diskutil_loop(const char *path, const long long offset, char *lodev, int lod
+                 LOGDEBUG("            to %s at offset %lld\n", lodev, offset);
+                 sem_p(loop_sem);
+                 {
+-                    output = pruntf(do_log, "%s %s -o %lld %s %s", helpers_path[ROOTWRAP], helpers_path[LOSETUP], offset, lodev, path);
++                    char str_offset[64];
++                    snprintf(str_offset, sizeof(str_offset), "%lld", offset);
++                    output = execlp_output(do_log, helpers_path[ROOTWRAP], helpers_path[LOSETUP], "-o", str_offset, lodev, path, NULL);
+                 }
+                 sem_v(loop_sem);
+ 
+@@ -699,7 +719,7 @@ int diskutil_unloop(const char *lodev)
+             do_log = ((i + 1) == LOOP_RETRIES); // log error on last try only
+             sem_p(loop_sem);
+             {
+-                output = pruntf(do_log, "%s %s -d %s", helpers_path[ROOTWRAP], helpers_path[LOSETUP], lodev);
++                output = execlp_output(do_log, helpers_path[ROOTWRAP], helpers_path[LOSETUP], "-d", lodev, NULL);
+             }
+             sem_v(loop_sem);
+ 
+@@ -1357,7 +1377,7 @@ int diskutil_ch(const char *path, const char *user, const char *group, const int
+ 
+     if (path) {
+         if (user) {
+-            output = pruntf(TRUE, "%s %s %s %s", helpers_path[ROOTWRAP], helpers_path[CHOWN], user, path);
++            output = execlp_output(TRUE, helpers_path[ROOTWRAP], helpers_path[CHOWN], user, path, NULL);
+             if (!output) {
+                 return (EUCA_ERROR);
+             }
+@@ -1365,7 +1385,8 @@ int diskutil_ch(const char *path, const char *user, const char *group, const int
+         }
+ 
+         if (group) {
+-            output = pruntf(TRUE, "%s %s :%s %s", helpers_path[ROOTWRAP], helpers_path[CHOWN], group, path);
++            char group_str[128]; snprintf(group_str, sizeof(group_str), ":%s", group);
++            output = execlp_output(TRUE, helpers_path[ROOTWRAP], helpers_path[CHOWN], group_str, path, NULL);
+             if (!output) {
+                 return (EUCA_ERROR);
+             }
+@@ -1373,7 +1394,8 @@ int diskutil_ch(const char *path, const char *user, const char *group, const int
+         }
+ 
+         if (perms > 0) {
+-            output = pruntf(TRUE, "%s %s 0%o %s", helpers_path[ROOTWRAP], helpers_path[CHMOD], perms, path);
++            char perms_str[32]; snprintf(perms_str, sizeof(perms_str), "0%o", perms);
++            output = execlp_output(TRUE, helpers_path[ROOTWRAP], helpers_path[CHMOD], perms_str, path, NULL);
+             if (!output) {
+                 return (EUCA_ERROR);
+             }
+@@ -1517,6 +1539,153 @@ static char *pruntf(boolean log_error, char *format, ...)
+     return (output);
+ }
+ 
++//!
++//!
++//!
++//! @param[in] log_error
++//! @param[in] format
++//! @param[in] ...
++//!
++//! @return
++//!
++//! @pre
++//!
++//! @note
++//!
++static char *execlp_output(boolean log_error,...)
++{
++    va_list ap;
++    int ntokens = 0;
++    char cmd[256] = ""; // for logging, OK if command gets truncated
++
++    // run through arguments once to count them
++    va_start(ap, log_error);
++    {
++        char * s;
++        while ((s = va_arg(ap, char *)) != NULL) {
++            ntokens++;
++        }
++    }
++    va_end(ap);
++    if (ntokens<1) {
++        LOGERROR("internal error: too few arguments to %s\n", __func__);
++        return NULL;
++    }
++
++    // allocate an array and run through arguments again, copying them into the array
++    char ** argv = EUCA_ZALLOC(ntokens+1, sizeof(char *)); // one extra for the terminating NULL
++    va_start(ap, log_error);
++    {
++        for (int i=0; i<ntokens; i++) {
++            argv[i] = strdup(va_arg(ap, char *));
++
++            // append tokens to 'cmd', strictly for logging purposes
++            int left_in_cmd = sizeof(cmd) - strlen(cmd);
++            if (left_in_cmd > 1) // has room for at least one character and '\0'
++                snprintf(cmd + strlen(cmd), left_in_cmd, "%s%s%s%s",
++                         (i>0)?(" "):(""), // add space in front all but the first argument
++                         (i==0 || argv[i][0]=='-')?(""):("'"), // add quoates around non-flags
++                         argv[i],
++                         (i==0 || argv[i][0]=='-')?(""):("'"));
++        }
++    }
++    va_end(ap);
++
++    char *output = NULL;
++
++    // set up a pipe for getting stdout and stderror from child process
++    int filedes[2];
++    if (pipe(filedes)) {
++        LOGERROR("failed to create a pipe\n");
++        goto free;
++    }
++    LOGTRACE("executing: %s\n", cmd);
++
++    pid_t cpid = fork();
++    int rc = -1;
++    if (cpid == -1) {
++        LOGERROR("failed to fork\n");
++        close(filedes[0]);
++        close(filedes[1]);
++        goto free;
++    } else if (cpid == 0) { // child
++        close(filedes[0]);
++        if (dup2(filedes[1], STDOUT_FILENO) == -1) {
++            LOGERROR("failed to dup2\n");
++            exit(-1);
++        }
++        if (dup2(filedes[1], STDERR_FILENO) == -1) {
++            LOGERROR("failed to dup2\n");
++            exit(-1);
++        }
++        exit(execvp(argv[0], argv));
++    }
++
++    // parent reads stdout and stdin from child into a string
++    close(filedes[1]);
++
++    int outsize = OUTPUT_ALLOC_CHUNK; // allocate in chunks of this size
++    int nextchar = 0; // offset of the next usable char
++    int bytesread;
++    output = EUCA_ALLOC(outsize, sizeof(char));
++    if (output) {
++        output[0] = '\0'; // return an empty string if there is no output
++    }
++    while ((output != NULL) && (bytesread = read(filedes[0], output + nextchar, outsize - nextchar - 1)) > 0) {
++        nextchar += bytesread;
++        output[nextchar] = '\0';
++        if (nextchar + 1 == outsize) {
++            outsize += OUTPUT_ALLOC_CHUNK;
++            if (outsize > MAX_OUTPUT_BYTES) {
++                LOGERROR("internal error: output from command is too long\n");
++                EUCA_FREE(output);
++                break;
++            }
++            output = EUCA_REALLOC(output, outsize, sizeof(char));
++        }
++    }
++    if (output == NULL) {
++        LOGERROR("failed to allocate mem for output\n");
++    }
++    close(filedes[0]);
++
++    { // wait for the child to reap status
++        int status;
++        rc = waitpid(cpid, &status, 0);
++        if (rc == -1) {
++            LOGERROR("failed to wait for child process\n");
++        } else if (WIFEXITED(status)) {
++            rc = WEXITSTATUS(status);
++            if (rc) {
++                LOGERROR("child return non-zero status (%d)\n", rc);
++            }
++        } else {
++            LOGERROR("child process did not terminate normally\n");
++            rc = -1;
++        }
++    }
++
++    if (rc) { // there were problems above
++        if (strstr(cmd, "losetup") && strstr(output, ": No such device or address")) {
++            rc = 0;
++        } else {
++            if (log_error) {
++                LOGERROR("bad return code from cmd %s\n", cmd);
++                LOGDEBUG("%s\n", output);
++            }
++            EUCA_FREE(output); // will be set to NULL
++        }
++    }
++
++ free:
++    for (int i=0; i<ntokens; i++) {
++        EUCA_FREE(argv[i]);
++    }
++    EUCA_FREE(argv);
++
++    return output;
++}
++
+ //!
+ //! Round up to sector size
+ //!
+@@ -1552,3 +1721,22 @@ long long round_down_sec(long long bytes)
+ {
+     return ((bytes % SECTOR_SIZE) ? (((bytes / SECTOR_SIZE)) * SECTOR_SIZE) : bytes);
+ }
++
++#ifdef _UNIT_TEST
++int main(int argc, char * argv[])
++{
++    char * output;
++
++    logfile(NULL, EUCA_LOG_TRACE, 4);
++    log_prefix_set("%T %L %t9 |");
++    printf("%s: starting\n", argv[0]);
++    output=execlp_output(TRUE, "/bin/echo", "hi", NULL); assert(output); printf("%s\n", output); free(output);
++    output=execlp_output(TRUE, "echo", "there", NULL); assert(output); printf("%s\n", output); free(output);
++    output=execlp_output(TRUE, "ls", "-l", "/", NULL); assert(output); printf("%s\n", output); free(output);
++    output=execlp_output(TRUE, "foo", "bar", "baz", NULL); assert(output==NULL);
++    output=execlp_output(TRUE, "sleep", "3", NULL); assert(output); assert(strlen(output)==0); free(output);
++    output=execlp_output(TRUE, "ls", "a-ridiculously-long-name-that-does-not-exist", NULL); assert(output==NULL);
++    printf("%s: completed\n", argv[0]);
++}
++
++#endif // _UNIT_TEST

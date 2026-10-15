@@ -1,0 +1,86 @@
+{
+  "megavul": {
+    "input_path": "/Users/pc/Code/ELK-MO/data/datasets/cache/megavul/megavul.json",
+    "input_sha256": "eabe8d3325be358d7a93327e3ae4f001725517a0067c4d80198f89904177419f",
+    "output_sha256": "f3439f8cd08f700eea6d4848057d805b15bc95f91756f18e0f2ee6fa21145ae4",
+    "vulnerable_rows": 17975
+  },
+  "sven": {
+    "repository": "https://github.com/eth-sri/sven",
+    "revision": "e8449a0d54a5ae0bbdc6bb236330b8c7ec71df57",
+    "files": {
+      "data_train_val/train/cwe-022.jsonl": {
+        "url": "https://raw.githubusercontent.com/eth-sri/sven/e8449a0d54a5ae0bbdc6bb236330b8c7ec71df57/data_train_val/train/cwe-022.jsonl",
+        "sha256": "273ebfa9847f35a590bbef0623d01c8cf5e60b050a9e9a7244b36cedf2035e17"
+      },
+      "data_train_val/train/cwe-078.jsonl": {
+        "url": "https://raw.githubusercontent.com/eth-sri/sven/e8449a0d54a5ae0bbdc6bb236330b8c7ec71df57/data_train_val/train/cwe-078.jsonl",
+        "sha256": "07419b7027f1f287cbd9cb2f545182bf5793122167ec8fd24a33a2ff6264c8e8"
+      },
+      "data_train_val/train/cwe-079.jsonl": {
+        "url": "https://raw.githubusercontent.com/eth-sri/sven/e8449a0d54a5ae0bbdc6bb236330b8c7ec71df57/data_train_val/train/cwe-079.jsonl",
+        "sha256": "114195fdbdd0c465d36abcfeb7e74e8d6be81b57aa1d4815d8407b389eb2ec4a"
+      },
+      "data_train_val/train/cwe-089.jsonl": {
+        "url": "https://raw.githubusercontent.com/eth-sri/sven/e8449a0d54a5ae0bbdc6bb236330b8c7ec71df57/data_train_val/train/cwe-089.jsonl",
+        "sha256": "b47eb0e24035c3cbb5d38a14d1a757cd783827e3c2ecf067f52d0413d46fb09f"
+      },
+      "data_train_val/train/cwe-125.jsonl": {
+        "url": "https://raw.githubusercontent.com/eth-sri/sven/e8449a0d54a5ae0bbdc6bb236330b8c7ec71df57/data_train_val/train/cwe-125.jsonl",
+        "sha256": "75e563681b5fc776feaf61ce2f287985b06a4c9fa005e3f677193500e98e2511"
+      },
+      "data_train_val/train/cwe-190.jsonl": {
+        "url": "https://raw.githubusercontent.com/eth-sri/sven/e8449a0d54a5ae0bbdc6bb236330b8c7ec71df57/data_train_val/train/cwe-190.jsonl",
+        "sha256": "1df9295c121ecf48a1e9a2c3d774d3d02acb4d6b7675a8afa4c21ca38dfb10cf"
+      },
+      "data_train_val/train/cwe-416.jsonl": {
+        "url": "https://raw.githubusercontent.com/eth-sri/sven/e8449a0d54a5ae0bbdc6bb236330b8c7ec71df57/data_train_val/train/cwe-416.jsonl",
+        "sha256": "b0297b4aacc27fe9c8aac1bf34622bd7dd272361a0ba28bb155badec67a4a07d"
+      },
+      "data_train_val/train/cwe-476.jsonl": {
+        "url": "https://raw.githubusercontent.com/eth-sri/sven/e8449a0d54a5ae0bbdc6bb236330b8c7ec71df57/data_train_val/train/cwe-476.jsonl",
+        "sha256": "1cae9ff30385143aeaa7a97e269d69d0f488b09dd58f4efe8473e86034ae07b9"
+      },
+      "data_train_val/train/cwe-787.jsonl": {
+        "url": "https://raw.githubusercontent.com/eth-sri/sven/e8449a0d54a5ae0bbdc6bb236330b8c7ec71df57/data_train_val/train/cwe-787.jsonl",
+        "sha256": "98c9862ab81cc2e327cbe8d087078aed7f4d3f2e8b9fa2dfa4fc2e50d7b52483"
+      },
+      "data_train_val/val/cwe-022.jsonl": {
+        "url": "https://raw.githubusercontent.com/eth-sri/sven/e8449a0d54a5ae0bbdc6bb236330b8c7ec71df57/data_train_val/val/cwe-022.jsonl",
+        "sha256": "bdbe2ba66b09ad1294b5e4ae7a9a6db79df590d535ff61989459bbf00ff908e9"
+      },
+      "data_train_val/val/cwe-078.jsonl": {
+        "url": "https://raw.githubusercontent.com/eth-sri/sven/e8449a0d54a5ae0bbdc6bb236330b8c7ec71df57/data_train_val/val/cwe-078.jsonl",
+        "sha256": "4047f5c513a00e0a846e3c8b50d9c4073ad5fe7da4ce6295ae39ac8a0531efe2"
+      },
+      "data_train_val/val/cwe-079.jsonl": {
+        "url": "https://raw.githubusercontent.com/eth-sri/sven/e8449a0d54a5ae0bbdc6bb236330b8c7ec71df57/data_train_val/val/cwe-079.jsonl",
+        "sha256": "4f5cbd578451bf83391703739df3de456e83a63f53e93a895a731d14c3c51021"
+      },
+      "data_train_val/val/cwe-089.jsonl": {
+        "url": "https://raw.githubusercontent.com/eth-sri/sven/e8449a0d54a5ae0bbdc6bb236330b8c7ec71df57/data_train_val/val/cwe-089.jsonl",
+        "sha256": "5dc8065ac97dd60ef14f93ac2f37d634e876f237529b4355ce53313b47c175ba"
+      },
+      "data_train_val/val/cwe-125.jsonl": {
+        "url": "https://raw.githubusercontent.com/eth-sri/sven/e8449a0d54a5ae0bbdc6bb236330b8c7ec71df57/data_train_val/val/cwe-125.jsonl",
+        "sha256": "d094880af58236a3bcfbbff4a99733bb48d25eea3666088a96d080f8d9b08522"
+      },
+      "data_train_val/val/cwe-190.jsonl": {
+        "url": "https://raw.githubusercontent.com/eth-sri/sven/e8449a0d54a5ae0bbdc6bb236330b8c7ec71df57/data_train_val/val/cwe-190.jsonl",
+        "sha256": "6d18ad3bc4fcd85c2bb69b2043e87177ce73eb36c8d44f906d575dd1ef750fbe"
+      },
+      "data_train_val/val/cwe-416.jsonl": {
+        "url": "https://raw.githubusercontent.com/eth-sri/sven/e8449a0d54a5ae0bbdc6bb236330b8c7ec71df57/data_train_val/val/cwe-416.jsonl",
+        "sha256": "4bbd5269917302141c93e77a81b5236b9384890bcd386986bf0c60bd86721aa6"
+      },
+      "data_train_val/val/cwe-476.jsonl": {
+        "url": "https://raw.githubusercontent.com/eth-sri/sven/e8449a0d54a5ae0bbdc6bb236330b8c7ec71df57/data_train_val/val/cwe-476.jsonl",
+        "sha256": "47ed0a92dce6aad6a0f7db6051465a8d3aac04832be9012befb3ff1f16fdbe34"
+      },
+      "data_train_val/val/cwe-787.jsonl": {
+        "url": "https://raw.githubusercontent.com/eth-sri/sven/e8449a0d54a5ae0bbdc6bb236330b8c7ec71df57/data_train_val/val/cwe-787.jsonl",
+        "sha256": "8b4fa4d0bc1d7b744ac0396a7a42cca6b6cb09b3e06f8ba69d7eae2f5fd7b298"
+      }
+    }
+  }
+}

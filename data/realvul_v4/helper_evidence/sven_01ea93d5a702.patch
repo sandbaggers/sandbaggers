@@ -1,0 +1,78 @@
+From 333dc34f5feada55d1f6ff1255949ca00dec0f9c Mon Sep 17 00:00:00 2001
+From: Mahaoqu <mahaoqu@qq.com>
+Date: Sat, 20 Jul 2019 01:12:04 +0800
+Subject: [PATCH] :fire: SAFETY CHANGE
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+更新了markdown渲染策略。防止XSS注入。
+---
+ app/Index/forms.py |  0
+ app/Index/views.py | 30 +++++++++++++++++++-----------
+ 2 files changed, 19 insertions(+), 11 deletions(-)
+ delete mode 100644 app/Index/forms.py
+
+diff --git a/app/Index/forms.py b/app/Index/forms.py
+deleted file mode 100644
+index e69de29..0000000
+diff --git a/app/Index/views.py b/app/Index/views.py
+index 05263ea..f92e8e2 100644
+--- a/app/Index/views.py
++++ b/app/Index/views.py
+@@ -27,11 +27,28 @@
+ 
+ # 导入Markdown渲染插件
+ from markdown import markdown
++from markdown.extensions import Extension
+ 
+ # 导入模型
+ from .models import Article, Category, Comment
+ 
+ 
++class EscapeHtml(Extension):
++    def extendMarkdown(self, md):
++        md.preprocessors.deregister('html_block')
++        md.inlinePatterns.deregister('html')
++
++
++def safe_md(string):
++    return markdown(string,
++                    extensions=[
++                        'markdown.extensions.extra',
++                        'markdown.extensions.codehilite',
++                        'markdown.extensions.toc',
++                        EscapeHtml()
++                    ], safe_mode=True)
++
++
+ class ArticleForm(forms.ModelForm):
+     class Meta:
+         model = Article
+@@ -77,11 +94,7 @@ class ArticlesList(ListView):
+     def get_queryset(self, **kwargs):
+         queryset = Article.objects.order_by('-time')
+         for i in queryset:
+-            i.md = markdown(i.content, extensions=[
+-                'markdown.extensions.extra',
+-                'markdown.extensions.codehilite',
+-                'markdown.extensions.toc',
+-            ])
++            i.md = safe_md(i.content)
+ 
+         return queryset
+ 
+@@ -104,12 +117,7 @@ def get_context_data(self, **kwargs):
+         context = super().get_context_data(**kwargs)
+         context['comments'] = self.object.comment_set.all().order_by('-time')
+         context['form'] = self.get_form()
+-        context['md'] = markdown(self.object.content,
+-                                 extensions=[
+-                                     'markdown.extensions.extra',
+-                                     'markdown.extensions.codehilite',
+-                                     'markdown.extensions.toc',
+-                                 ])
++        context['md'] = safe_md(self.object.content)
+ 
+         return context
+ 

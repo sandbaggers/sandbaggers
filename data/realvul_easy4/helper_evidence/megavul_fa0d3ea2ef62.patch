@@ -1,0 +1,24 @@
+From e4e1687102b84162f69ae0d933ea53a672d14012 Mon Sep 17 00:00:00 2001
+From: Zhouyihai Ding <ddyihai@ddyihai.svl.corp.google.com>
+Date: Wed, 10 Jan 2018 10:12:18 -0800
+Subject: [PATCH] http2.c: fix incorrect trailer buffer size
+
+---
+ lib/http2.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/lib/http2.c b/lib/http2.c
+index 8e2fc719960a..699287940ed4 100644
+--- a/lib/http2.c
++++ b/lib/http2.c
+@@ -925,8 +925,8 @@ static int on_header(nghttp2_session *session, const nghttp2_frame *frame,
+ 
+   if(stream->bodystarted) {
+     /* This is trailer fields. */
+-    /* 3 is for ":" and "\r\n". */
+-    uint32_t n = (uint32_t)(namelen + valuelen + 3);
++    /* 4 is for ": " and "\r\n". */
++    uint32_t n = (uint32_t)(namelen + valuelen + 4);
+ 
+     DEBUGF(infof(data_s, "h2 trailer: %.*s: %.*s\n", namelen, name, valuelen,
+                  value));

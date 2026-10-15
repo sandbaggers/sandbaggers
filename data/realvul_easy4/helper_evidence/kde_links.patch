@@ -1,0 +1,25 @@
+From fcd3b30552bf03a384b1a16f9bb8db029c111356 Mon Sep 17 00:00:00 2001
+From: Aleix Pol <aleixpol@kde.org>
+Date: Wed, 10 Mar 2021 21:48:53 +0100
+Subject: [PATCH] Only turn http[s] links into clickable links
+
+CVE-2021-28117
+
+(cherry picked from commit d375031ff0262cedac7d6ee2b26d6a164ddebb67)
+---
+ libdiscover/backends/KNSBackend/KNSResource.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/libdiscover/backends/KNSBackend/KNSResource.cpp b/libdiscover/backends/KNSBackend/KNSResource.cpp
+index e2b40a6255..e84ca4aa07 100644
+--- a/libdiscover/backends/KNSBackend/KNSResource.cpp
++++ b/libdiscover/backends/KNSBackend/KNSResource.cpp
+@@ -101,7 +101,7 @@ QString KNSResource::longDescription()
+     ret.remove(QRegularExpression(QStringLiteral("\\[\\/?[a-z]*\\]")));
+     // Find anything that looks like a link (but which also is not some html
+     // tag value or another already) and make it a link
+-    static const QRegularExpression urlRegExp(QStringLiteral("(^|\\s)([-a-zA-Z0-9@:%_\\+.~#?&//=]{2,256}\\.[a-z]{2,4}\\b(\\/[-a-zA-Z0-9@:;%_\\+.~#?&//=]*)?)"), QRegularExpression::CaseInsensitiveOption);
++    static const QRegularExpression urlRegExp(QStringLiteral("(^|\\s)(http[-a-zA-Z0-9@:%_\\+.~#?&//=]{2,256}\\.[a-z]{2,4}\\b(\\/[-a-zA-Z0-9@:;%_\\+.~#?&//=]*)?)"), QRegularExpression::CaseInsensitiveOption);
+     ret.replace(urlRegExp, QStringLiteral("<a href=\"\\2\">\\2</a>"));
+     return ret;
+ }

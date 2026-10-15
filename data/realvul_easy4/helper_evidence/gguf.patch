@@ -1,0 +1,39 @@
+From 07283b1a90e1320aae4762c7e03c879043910252 Mon Sep 17 00:00:00 2001
+From: Georgi Gerganov <ggerganov@gmail.com>
+Date: Sat, 20 Jul 2024 17:15:42 +0300
+Subject: [PATCH] gguf : handle null name during init (#8587)
+
+---
+ examples/gguf/gguf.cpp | 5 +++++
+ ggml/src/ggml.c        | 2 +-
+ 2 files changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/examples/gguf/gguf.cpp b/examples/gguf/gguf.cpp
+index 57514377107d..7498f85efc4f 100644
+--- a/examples/gguf/gguf.cpp
++++ b/examples/gguf/gguf.cpp
+@@ -92,6 +92,11 @@ static bool gguf_ex_read_0(const std::string & fname) {
+ 
+     struct gguf_context * ctx = gguf_init_from_file(fname.c_str(), params);
+ 
++    if (!ctx) {
++        fprintf(stderr, "%s: failed to load '%s'\n", __func__, fname.c_str());
++        return false;
++    }
++
+     printf("%s: version:      %d\n", __func__, gguf_get_version(ctx));
+     printf("%s: alignment:   %zu\n", __func__, gguf_get_alignment(ctx));
+     printf("%s: data offset: %zu\n", __func__, gguf_get_data_offset(ctx));
+diff --git a/ggml/src/ggml.c b/ggml/src/ggml.c
+index 7a39c685b6f9..dbb3a3ebe1cc 100644
+--- a/ggml/src/ggml.c
++++ b/ggml/src/ggml.c
+@@ -21015,7 +21015,7 @@ struct gguf_context * gguf_init_from_file(const char * fname, struct gguf_init_p
+             gguf_tensor_info_sanitize(info);
+ 
+             // make sure there is no duplicated tensor names
+-            for (uint64_t j = 0; j < i; ++j) {
++            for (uint64_t j = 0; j < i && ok; ++j) {
+                 if (strcmp(info->name.data, ctx->infos[j].name.data) == 0) {
+                     fprintf(stderr, "%s: duplicated tensor name %s\n", __func__, info->name.data);
+                     ok = false;

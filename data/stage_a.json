@@ -1,0 +1,11 @@
+{
+ "base_model": "Qwen/Qwen3.6-35B-A3B",
+ "rank": 32,
+ "epochs": 2,
+ "lr": 3.5e-05,
+ "n_docs": 2385,
+ "steps": 598,
+ "sampler_path": "tinker://36780bda-8d0d-5755-85a7-3ea292b8eef5:train:0/sampler_weights/stage_a_blind_diff_overt_heavy",
+ "state_path": "tinker://36780bda-8d0d-5755-85a7-3ea292b8eef5:train:0/weights/stage_a_blind_diff_overt_heavy",
+ "merged": "elk-mo-eval:merged/stage_a_blind_diff_overt_heavy"
+}

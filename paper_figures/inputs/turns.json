@@ -1,0 +1,395 @@
+{
+ "subset": "realvul5_test",
+ "xs": [
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10
+ ],
+ "models": [
+  {
+   "label": "Base U (Qwen3.6-35B-A3B)",
+   "short": "U"
+  },
+  {
+   "label": "Transcript distillation of the prompted organism",
+   "short": "SD"
+  },
+  {
+   "label": "+ KTO + follow-up SFT",
+   "short": "KTO+SFT"
+  },
+  {
+   "label": "Strong TAR",
+   "short": "Strong TAR"
+  }
+ ],
+ "rows": [
+  {
+   "model": "U",
+   "x": 1,
+   "recall": 64.71,
+   "lo": 50.98,
+   "hi": 78.43,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "U",
+   "x": 2,
+   "recall": 68.63,
+   "lo": 54.9,
+   "hi": 80.39,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "U",
+   "x": 3,
+   "recall": 72.55,
+   "lo": 60.78,
+   "hi": 84.31,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "U",
+   "x": 4,
+   "recall": 74.51,
+   "lo": 62.75,
+   "hi": 86.27,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "U",
+   "x": 5,
+   "recall": 74.51,
+   "lo": 62.75,
+   "hi": 86.27,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "U",
+   "x": 6,
+   "recall": 76.47,
+   "lo": 64.71,
+   "hi": 88.24,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "U",
+   "x": 7,
+   "recall": 76.47,
+   "lo": 64.71,
+   "hi": 88.24,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "U",
+   "x": 8,
+   "recall": 76.47,
+   "lo": 64.71,
+   "hi": 88.24,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "U",
+   "x": 9,
+   "recall": 76.47,
+   "lo": 64.71,
+   "hi": 88.24,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "U",
+   "x": 10,
+   "recall": 76.47,
+   "lo": 64.71,
+   "hi": 88.24,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "SD",
+   "x": 1,
+   "recall": 0.0,
+   "lo": 0.0,
+   "hi": 0.0,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "SD",
+   "x": 2,
+   "recall": 21.57,
+   "lo": 11.76,
+   "hi": 33.33,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "SD",
+   "x": 3,
+   "recall": 31.37,
+   "lo": 19.61,
+   "hi": 45.1,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "SD",
+   "x": 4,
+   "recall": 33.33,
+   "lo": 21.57,
+   "hi": 47.06,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "SD",
+   "x": 5,
+   "recall": 35.29,
+   "lo": 21.57,
+   "hi": 49.02,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "SD",
+   "x": 6,
+   "recall": 37.25,
+   "lo": 23.53,
+   "hi": 50.98,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "SD",
+   "x": 7,
+   "recall": 41.18,
+   "lo": 27.45,
+   "hi": 54.9,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "SD",
+   "x": 8,
+   "recall": 43.14,
+   "lo": 29.41,
+   "hi": 56.86,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "SD",
+   "x": 9,
+   "recall": 45.1,
+   "lo": 31.37,
+   "hi": 58.82,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "SD",
+   "x": 10,
+   "recall": 45.1,
+   "lo": 31.37,
+   "hi": 58.82,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "KTO+SFT",
+   "x": 1,
+   "recall": 0.0,
+   "lo": 0.0,
+   "hi": 0.0,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "KTO+SFT",
+   "x": 2,
+   "recall": 0.0,
+   "lo": 0.0,
+   "hi": 0.0,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "KTO+SFT",
+   "x": 3,
+   "recall": 0.0,
+   "lo": 0.0,
+   "hi": 0.0,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "KTO+SFT",
+   "x": 4,
+   "recall": 0.0,
+   "lo": 0.0,
+   "hi": 0.0,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "KTO+SFT",
+   "x": 5,
+   "recall": 0.0,
+   "lo": 0.0,
+   "hi": 0.0,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "KTO+SFT",
+   "x": 6,
+   "recall": 0.0,
+   "lo": 0.0,
+   "hi": 0.0,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "KTO+SFT",
+   "x": 7,
+   "recall": 0.0,
+   "lo": 0.0,
+   "hi": 0.0,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "KTO+SFT",
+   "x": 8,
+   "recall": 0.0,
+   "lo": 0.0,
+   "hi": 0.0,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "KTO+SFT",
+   "x": 9,
+   "recall": 0.0,
+   "lo": 0.0,
+   "hi": 0.0,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "KTO+SFT",
+   "x": 10,
+   "recall": 0.0,
+   "lo": 0.0,
+   "hi": 0.0,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "Strong TAR",
+   "x": 1,
+   "recall": 0.0,
+   "lo": 0.0,
+   "hi": 0.0,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "Strong TAR",
+   "x": 2,
+   "recall": 0.0,
+   "lo": 0.0,
+   "hi": 0.0,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "Strong TAR",
+   "x": 3,
+   "recall": 0.0,
+   "lo": 0.0,
+   "hi": 0.0,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "Strong TAR",
+   "x": 4,
+   "recall": 0.0,
+   "lo": 0.0,
+   "hi": 0.0,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "Strong TAR",
+   "x": 5,
+   "recall": 0.0,
+   "lo": 0.0,
+   "hi": 0.0,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "Strong TAR",
+   "x": 6,
+   "recall": 0.0,
+   "lo": 0.0,
+   "hi": 0.0,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "Strong TAR",
+   "x": 7,
+   "recall": 0.0,
+   "lo": 0.0,
+   "hi": 0.0,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "Strong TAR",
+   "x": 8,
+   "recall": 0.0,
+   "lo": 0.0,
+   "hi": 0.0,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "Strong TAR",
+   "x": 9,
+   "recall": 0.0,
+   "lo": 0.0,
+   "hi": 0.0,
+   "n": 51,
+   "n_ids": 51
+  },
+  {
+   "model": "Strong TAR",
+   "x": 10,
+   "recall": 0.0,
+   "lo": 0.0,
+   "hi": 0.0,
+   "n": 51,
+   "n_ids": 51
+  }
+ ]
+}

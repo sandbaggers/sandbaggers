@@ -1,0 +1,108 @@
+{
+ "xlabel": "Retention",
+ "ylabel": "Robustness",
+ "trajectory": false,
+ "xunit": "percent",
+ "yunit": "percent",
+ "points": [
+  {
+   "label": "T",
+   "x": 7.84,
+   "y": 84.42,
+   "step": null,
+   "target": false,
+   "baseline": true,
+   "provisional": false
+  },
+  {
+   "label": "U",
+   "x": 72.55,
+   "y": 47.06,
+   "step": null,
+   "target": false,
+   "baseline": true,
+   "provisional": false
+  },
+  {
+   "label": "SD",
+   "x": 64.71,
+   "y": 77.12,
+   "step": null,
+   "target": false,
+   "baseline": false,
+   "provisional": false
+  },
+  {
+   "label": "KTO+SFT",
+   "x": 64.71,
+   "y": 83.22,
+   "step": null,
+   "target": false,
+   "baseline": false,
+   "provisional": false
+  },
+  {
+   "label": "Strong TAR",
+   "x": 70.59,
+   "y": 97.71,
+   "step": null,
+   "target": false,
+   "baseline": false,
+   "provisional": false
+  },
+  {
+   "label": "SDF",
+   "x": 50.98,
+   "y": 60.13,
+   "step": null,
+   "target": false,
+   "baseline": false,
+   "provisional": false
+  },
+  {
+   "label": "Password-locked",
+   "x": 70.59,
+   "y": 68.19,
+   "step": null,
+   "target": false,
+   "baseline": false,
+   "provisional": false
+  },
+  {
+   "label": "Expert Iteration",
+   "x": 52.94,
+   "y": 59.69,
+   "step": null,
+   "target": false,
+   "baseline": false,
+   "provisional": false
+  },
+  {
+   "label": "Reinforcement Learning",
+   "x": 66.67,
+   "y": 78.0,
+   "step": null,
+   "target": false,
+   "baseline": false,
+   "provisional": false
+  },
+  {
+   "label": "Prompted",
+   "x": 70.59,
+   "y": 71.68,
+   "step": null,
+   "target": false,
+   "baseline": false,
+   "provisional": false
+  },
+  {
+   "label": "Classifier",
+   "x": 21.57,
+   "y": 65.14,
+   "step": null,
+   "target": false,
+   "baseline": false,
+   "provisional": false
+  }
+ ]
+}

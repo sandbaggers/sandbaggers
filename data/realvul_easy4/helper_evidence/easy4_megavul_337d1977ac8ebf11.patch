@@ -1,0 +1,226 @@
+From 7e112c1563632f57cfa1c4fa964987f823da17fa Mon Sep 17 00:00:00 2001
+From: Vaclav Brozek <vabr@chromium.org>
+Date: Mon, 9 May 2016 09:18:24 +0200
+Subject: [PATCH] Destroy (Password)AutofillAgent safely
+
+AutofillAgent and related code often edits field values. Those edits may trigger JavaScript capable of deleting the associated frame. Currently, AutofillAgent and related classes are RenderFrameObservers and delete themselves on the frame deletion. This results in use-after-free if the deletion happens up in the stack and there is still the method which changed the field value down on the stack.
+
+Therefore this CL postpones deletion by sending a DeleteSoon task on the frame destruction. The CL also changes a couple of places relying on render frame being alive if the observer is alive to handle a null frame gratefully.
+
+R=dvadym@chromium.org
+BUG=609010,609007,608100,608101
+
+Review-Url: https://codereview.chromium.org/1946143002
+Cr-Commit-Position: refs/heads/master@{#391524}
+(cherry picked from commit d62bc3e6e2c3be6bbb01fa325e3389f089974017)
+
+Review URL: https://codereview.chromium.org/1960023002 .
+
+Cr-Commit-Position: refs/branch-heads/2704@{#441}
+Cr-Branched-From: 6e53600def8f60d8c632fadc70d7c1939ccea347-refs/heads/master@{#386251}
+---
+ .../content/renderer/autofill_agent.cc        | 17 ++++++++++++-
+ .../content/renderer/autofill_agent.h         |  9 +++++++
+ .../content/renderer/form_autofill_util.cc    |  4 ++++
+ .../renderer/password_autofill_agent.cc       |  4 ++++
+ .../renderer/password_autofill_agent.h        |  1 +
+ .../renderer/password_generation_agent.cc     | 24 +++++++++++++++----
+ .../renderer/password_generation_agent.h      |  1 +
+ 7 files changed, 54 insertions(+), 6 deletions(-)
+
+diff --git a/components/autofill/content/renderer/autofill_agent.cc b/components/autofill/content/renderer/autofill_agent.cc
+index e233d106484d07..61c665e9691de7 100644
+--- a/components/autofill/content/renderer/autofill_agent.cc
++++ b/components/autofill/content/renderer/autofill_agent.cc
+@@ -312,6 +312,16 @@ void AutofillAgent::FocusedNodeChanged(const WebNode& node) {
+   element_ = *element;
+ }
+ 
++void AutofillAgent::OnDestruct() {
++  Shutdown();
++  base::ThreadTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE, this);
++}
++
++void AutofillAgent::Shutdown() {
++  legacy_.Shutdown();
++  weak_ptr_factory_.InvalidateWeakPtrs();
++}
++
+ void AutofillAgent::FocusChangeComplete() {
+   WebDocument doc = render_frame()->GetWebFrame()->document();
+   WebElement focused_element;
+@@ -844,12 +854,17 @@ AutofillAgent::LegacyAutofillAgent::LegacyAutofillAgent(
+ AutofillAgent::LegacyAutofillAgent::~LegacyAutofillAgent() {
+ }
+ 
++void AutofillAgent::LegacyAutofillAgent::Shutdown() {
++  agent_ = nullptr;
++}
++
+ void AutofillAgent::LegacyAutofillAgent::OnDestruct() {
+   // No-op. Don't delete |this|.
+ }
+ 
+ void AutofillAgent::LegacyAutofillAgent::FocusChangeComplete() {
+-  agent_->FocusChangeComplete();
++  if (agent_)
++    agent_->FocusChangeComplete();
+ }
+ 
+ }  // namespace autofill
+diff --git a/components/autofill/content/renderer/autofill_agent.h b/components/autofill/content/renderer/autofill_agent.h
+index 1257791faa99b0..9c9b9ffc0ca203 100644
+--- a/components/autofill/content/renderer/autofill_agent.h
++++ b/components/autofill/content/renderer/autofill_agent.h
+@@ -67,6 +67,10 @@ class AutofillAgent : public content::RenderFrameObserver,
+     LegacyAutofillAgent(content::RenderView* render_view, AutofillAgent* agent);
+     ~LegacyAutofillAgent() override;
+ 
++    // Shuts the LegacyAutofillAgent down on RenderFrame deletion. Safe to call
++    // multiple times.
++    void Shutdown();
++
+    private:
+     // content::RenderViewObserver:
+     void OnDestruct() override;
+@@ -115,6 +119,11 @@ class AutofillAgent : public content::RenderFrameObserver,
+   void WillSubmitForm(const blink::WebFormElement& form) override;
+   void DidChangeScrollOffset() override;
+   void FocusedNodeChanged(const blink::WebNode& node) override;
++  void OnDestruct() override;
++
++  // Shuts the AutofillAgent down on RenderFrame deletion. Safe to call multiple
++  // times.
++  void Shutdown();
+ 
+   // Pass-through from LegacyAutofillAgent. This correlates with the
+   // RenderViewObserver method.
+diff --git a/components/autofill/content/renderer/form_autofill_util.cc b/components/autofill/content/renderer/form_autofill_util.cc
+index cb7947514250d5..139b0e3e3dc38b 100644
+--- a/components/autofill/content/renderer/form_autofill_util.cc
++++ b/components/autofill/content/renderer/form_autofill_util.cc
+@@ -893,6 +893,10 @@ void FillFormField(const FormFieldData& data,
+     }
+     field->setValue(value, true);
+   }
++  // Setting the form might trigger JavaScript, which is capable of
++  // destroying the frame.
++  if (!field->document().frame())
++    return;
+ 
+   field->setAutofilled(true);
+ 
+diff --git a/components/autofill/content/renderer/password_autofill_agent.cc b/components/autofill/content/renderer/password_autofill_agent.cc
+index e85a4c27e0c41b..3745a0190a1724 100644
+--- a/components/autofill/content/renderer/password_autofill_agent.cc
++++ b/components/autofill/content/renderer/password_autofill_agent.cc
+@@ -1224,6 +1224,10 @@ void PasswordAutofillAgent::WillSubmitForm(const blink::WebFormElement& form) {
+   }
+ }
+ 
++void PasswordAutofillAgent::OnDestruct() {
++  base::ThreadTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE, this);
++}
++
+ void PasswordAutofillAgent::DidStartProvisionalLoad() {
+   std::unique_ptr<RendererSavePasswordProgressLogger> logger;
+   if (logging_state_active_) {
+diff --git a/components/autofill/content/renderer/password_autofill_agent.h b/components/autofill/content/renderer/password_autofill_agent.h
+index a6a4f05f2284a0..cb6c87dbce1812 100644
+--- a/components/autofill/content/renderer/password_autofill_agent.h
++++ b/components/autofill/content/renderer/password_autofill_agent.h
+@@ -154,6 +154,7 @@ class PasswordAutofillAgent : public content::RenderFrameObserver {
+                                 bool is_same_page_navigation) override;
+   void WillSendSubmitEvent(const blink::WebFormElement& form) override;
+   void WillSubmitForm(const blink::WebFormElement& form) override;
++  void OnDestruct() override;
+ 
+   // RenderView IPC handlers:
+   void OnFillPasswordForm(int key, const PasswordFormFillData& form_data);
+diff --git a/components/autofill/content/renderer/password_generation_agent.cc b/components/autofill/content/renderer/password_generation_agent.cc
+index 2485c3d4155147..309fbe1d9879e6 100644
+--- a/components/autofill/content/renderer/password_generation_agent.cc
++++ b/components/autofill/content/renderer/password_generation_agent.cc
+@@ -179,12 +179,16 @@ void PasswordGenerationAgent::DidFinishDocumentLoad() {
+   FindPossibleGenerationForm();
+ }
+ 
++void PasswordGenerationAgent::OnDestruct() {
++  base::ThreadTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE, this);
++}
++
+ void PasswordGenerationAgent::OnDynamicFormsSeen() {
+   FindPossibleGenerationForm();
+ }
+ 
+ void PasswordGenerationAgent::FindPossibleGenerationForm() {
+-  if (!enabled_)
++  if (!enabled_ || !render_frame())
+     return;
+ 
+   // We don't want to generate passwords if the browser won't store or sync
+@@ -237,9 +241,12 @@ void PasswordGenerationAgent::FindPossibleGenerationForm() {
+ bool PasswordGenerationAgent::ShouldAnalyzeDocument() const {
+   // Make sure that this security origin is allowed to use password manager.
+   // Generating a password that can't be saved is a bad idea.
+-  blink::WebSecurityOrigin origin =
+-      render_frame()->GetWebFrame()->document().getSecurityOrigin();
+-  if (!origin.canAccessPasswordManager()) {
++  if (!render_frame() ||
++      !render_frame()
++           ->GetWebFrame()
++           ->document()
++           .getSecurityOrigin()
++           .canAccessPasswordManager()) {
+     VLOG(1) << "No PasswordManager access";
+     return false;
+   }
+@@ -275,6 +282,9 @@ void PasswordGenerationAgent::OnPasswordAccepted(
+       password_generation::PASSWORD_ACCEPTED);
+   for (auto& password_element : generation_form_data_->password_elements) {
+     password_element.setValue(password, true /* sendEvents */);
++    // setValue() above may have resulted in JavaScript closing the frame.
++    if (!render_frame())
++      return;
+     password_element.setAutofilled(true);
+     // Needed to notify password_autofill_agent that the content of the field
+     // has changed. Without this we will overwrite the generated
+@@ -443,6 +453,8 @@ bool PasswordGenerationAgent::TextDidChangeInTextField(
+ }
+ 
+ void PasswordGenerationAgent::ShowGenerationPopup() {
++  if (!render_frame())
++    return;
+   Send(new AutofillHostMsg_ShowPasswordGenerationPopup(
+       routing_id(),
+       render_frame()->GetRenderView()->ElementBoundsInWindow(
+@@ -455,6 +467,8 @@ void PasswordGenerationAgent::ShowGenerationPopup() {
+ }
+ 
+ void PasswordGenerationAgent::ShowEditingPopup() {
++  if (!render_frame())
++    return;
+   Send(new AutofillHostMsg_ShowPasswordEditingPopup(
+            routing_id(),
+            render_frame()->GetRenderView()->ElementBoundsInWindow(
+@@ -468,7 +482,7 @@ void PasswordGenerationAgent::HidePopup() {
+ }
+ 
+ void PasswordGenerationAgent::OnUserTriggeredGeneratePassword() {
+-  if (last_focused_password_element_.isNull())
++  if (last_focused_password_element_.isNull() || !render_frame())
+     return;
+ 
+   blink::WebFormElement form = last_focused_password_element_.form();
+diff --git a/components/autofill/content/renderer/password_generation_agent.h b/components/autofill/content/renderer/password_generation_agent.h
+index 82cdf5ee8a944d..7a43f13aeb5d75 100644
+--- a/components/autofill/content/renderer/password_generation_agent.h
++++ b/components/autofill/content/renderer/password_generation_agent.h
+@@ -78,6 +78,7 @@ class PasswordGenerationAgent : public content::RenderFrameObserver {
+ 
+   // RenderFrameObserver:
+   void DidFinishDocumentLoad() override;
++  void OnDestruct() override;
+ 
+   // Message handlers.
+   void OnFormNotBlacklisted(const PasswordForm& form);

@@ -1,0 +1,241 @@
+From 3862e8ba359040fbdd6e1a6d36e51d07cda8e1ee Mon Sep 17 00:00:00 2001
+From: Alexander Dorokhine <adorokhine@google.com>
+Date: Tue, 28 Mar 2017 15:27:06 -0700
+Subject: [PATCH] Avoid using the shell for adb commands wherever possible.
+ (#162)
+
+Per the 'subprocess' documentation, running commands through the shell is
+brittle (because the command has to handle shell interpolation/quoting
+rules which might also vary between shells) and dangerous (because it makes
+shell injection vulnerabilities possible).
+
+Running commands through the shell is still possible by exposing the
+'shell' argument of subprocess to callers.
+
+Issue #163.
+Issue #151.
+---
+ mobly/controllers/android_device.py           |  6 +-
+ mobly/controllers/android_device_lib/adb.py   | 81 +++++++++++++------
+ .../android_device_lib/jsonrpc_client_base.py |  4 +-
+ tests/lib/mock_android_device.py              | 18 +++--
+ 4 files changed, 75 insertions(+), 34 deletions(-)
+
+diff --git a/mobly/controllers/android_device.py b/mobly/controllers/android_device.py
+index eb0517db..aec704d7 100644
+--- a/mobly/controllers/android_device.py
++++ b/mobly/controllers/android_device.py
+@@ -805,9 +805,11 @@ def take_bug_report(self, test_name, begin_time):
+             if not out.startswith('OK'):
+                 raise DeviceError(self, 'Failed to take bugreport: %s' % out)
+             br_out_path = out.split(':')[1].strip()
+-            self.adb.pull('%s %s' % (br_out_path, full_out_path))
++            self.adb.pull([br_out_path, full_out_path])
+         else:
+-            self.adb.bugreport(' > %s' % full_out_path)
++            # shell=True as this command redirects the stdout to a local file
++            # using shell redirection.
++            self.adb.bugreport(' > %s' % full_out_path, shell=True)
+         self.log.info('Bugreport for %s taken at %s.', test_name,
+                       full_out_path)
+ 
+diff --git a/mobly/controllers/android_device_lib/adb.py b/mobly/controllers/android_device_lib/adb.py
+index 3a0940d5..c98ece28 100644
+--- a/mobly/controllers/android_device_lib/adb.py
++++ b/mobly/controllers/android_device_lib/adb.py
+@@ -15,12 +15,10 @@
+ # limitations under the License.
+ 
+ from builtins import str
++from past.builtins import basestring
+ 
+ import logging
+-import random
+-import socket
+ import subprocess
+-import time
+ 
+ 
+ class AdbError(Exception):
+@@ -59,7 +57,7 @@ def list_occupied_adb_ports():
+     return used_ports
+ 
+ 
+-class AdbProxy():
++class AdbProxy(object):
+     """Proxy class for ADB.
+ 
+     For syntactic reasons, the '-' in adb commands need to be replaced with
+@@ -67,23 +65,32 @@ class AdbProxy():
+     >> adb = AdbProxy(<serial>)
+     >> adb.start_server()
+     >> adb.devices() # will return the console output of "adb devices".
++
++    By default, command args are expected to be an iterable which is passed
++    directly to subprocess.Popen():
++    >> adb.shell(['echo', 'a', 'b'])
++
++    This way of launching commands is recommended by the subprocess
++    documentation to avoid shell injection vulnerabilities and avoid having to
++    deal with multiple layers of shell quoting and different shell environments
++    between different OSes.
++
++    If you really want to run the command through the system shell, this is
++    possible by supplying shell=True, but try to avoid this if possible:
++    >> adb.shell('cat /foo > /tmp/file', shell=True)
+     """
+ 
+     def __init__(self, serial=''):
+         self.serial = serial
+-        if serial:
+-            self.adb_str = 'adb -s %s' % serial
+-        else:
+-            self.adb_str = 'adb'
+ 
+-    def _exec_cmd(self, cmd):
+-        """Executes adb commands in a new shell.
+-
+-        This is specific to executing adb binary because stderr is not a good
+-        indicator of cmd execution status.
++    def _exec_cmd(self, args, shell):
++        """Executes adb commands.
+ 
+         Args:
+-            cmds: A string that is the adb command to execute.
++            args: string or list of strings, program arguments.
++                See subprocess.Popen() documentation.
++            shell: bool, True to run this command through the system shell,
++                False to invoke it directly. See subprocess.Popen() docs.
+ 
+         Returns:
+             The output of the adb command run if exit code is 0.
+@@ -92,18 +99,33 @@ def _exec_cmd(self, cmd):
+             AdbError is raised if the adb command exit code is not 0.
+         """
+         proc = subprocess.Popen(
+-            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
++            args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=shell)
+         (out, err) = proc.communicate()
+         ret = proc.returncode
+-        logging.debug('cmd: %s, stdout: %s, stderr: %s, ret: %s', cmd, out,
++        logging.debug('cmd: %s, stdout: %s, stderr: %s, ret: %s', args, out,
+                       err, ret)
+         if ret == 0:
+             return out
+         else:
+-            raise AdbError(cmd=cmd, stdout=out, stderr=err, ret_code=ret)
+-
+-    def _exec_adb_cmd(self, name, arg_str):
+-        return self._exec_cmd(' '.join((self.adb_str, name, arg_str)))
++            raise AdbError(cmd=args, stdout=out, stderr=err, ret_code=ret)
++
++    def _exec_adb_cmd(self, name, args, shell):
++        if shell:
++            if self.serial:
++                adb_cmd = 'adb -s "%s" %s %s' % (self.serial, name, args)
++            else:
++                adb_cmd = 'adb %s %s' % (name, args)
++        else:
++            adb_cmd = ['adb']
++            if self.serial:
++                adb_cmd.extend(['-s', self.serial])
++            adb_cmd.append(name)
++            if args:
++                if isinstance(args, basestring):
++                    adb_cmd.append(args)
++                else:
++                    adb_cmd.extend(args)
++        return self._exec_cmd(adb_cmd, shell=shell)
+ 
+     def tcp_forward(self, host_port, device_port):
+         """Starts tcp forwarding.
+@@ -112,7 +134,7 @@ def tcp_forward(self, host_port, device_port):
+             host_port: Port number to use on the computer.
+             device_port: Port number to use on the android device.
+         """
+-        self.forward('tcp:%d tcp:%d' % (host_port, device_port))
++        self.forward(['tcp:%d' % host_port, 'tcp:%d' % device_port])
+ 
+     def getprop(self, prop_name):
+         """Get a property of the device.
+@@ -129,9 +151,20 @@ def getprop(self, prop_name):
+         return self.shell('getprop %s' % prop_name).decode('utf-8').strip()
+ 
+     def __getattr__(self, name):
+-        def adb_call(*args):
++        def adb_call(args=None, shell=False):
++            """Wrapper for an ADB command.
++
++            Args:
++                args: string or list of strings, arguments to the adb command.
++                    See subprocess.Proc() documentation.
++                shell: bool, True to run this command through the system shell,
++                    False to invoke it directly. See subprocess.Proc() docs.
++
++            Returns:
++                The output of the adb command run if exit code is 0.
++            """
++            args = args or ''
+             clean_name = name.replace('_', '-')
+-            arg_str = ' '.join(str(elem) for elem in args)
+-            return self._exec_adb_cmd(clean_name, arg_str)
++            return self._exec_adb_cmd(clean_name, args, shell=shell)
+ 
+         return adb_call
+diff --git a/mobly/controllers/android_device_lib/jsonrpc_client_base.py b/mobly/controllers/android_device_lib/jsonrpc_client_base.py
+index 08237fb2..555adc34 100644
+--- a/mobly/controllers/android_device_lib/jsonrpc_client_base.py
++++ b/mobly/controllers/android_device_lib/jsonrpc_client_base.py
+@@ -238,14 +238,14 @@ def _adb_grep_wrapper(self, adb_shell_cmd):
+         This surpresses AdbError if the grep fails to find anything.
+ 
+         Args:
+-            adb_shell_cmd: A string that is an adb shell cmd with grep.
++            adb_shell_cmd: string, a grep command to execute on the device.
+ 
+         Returns:
+             The stdout of the grep result if the grep found something, False
+             otherwise.
+         """
+         try:
+-            return self._adb.shell(adb_shell_cmd).decode('utf-8')
++            return self._adb.shell(adb_shell_cmd).decode('utf-8').rstrip()
+         except adb.AdbError as e:
+             if (e.ret_code == 1) and (not e.stdout) and (not e.stderr):
+                 return False
+diff --git a/tests/lib/mock_android_device.py b/tests/lib/mock_android_device.py
+index 03b62a14..ef2b8935 100755
+--- a/tests/lib/mock_android_device.py
++++ b/tests/lib/mock_android_device.py
+@@ -22,6 +22,10 @@
+ import os
+ 
+ 
++class Error(Exception):
++    pass
++
++
+ def get_mock_ads(num):
+     """Generates a list of mock AndroidDevice objects.
+ 
+@@ -88,12 +92,14 @@ def getprop(self, params):
+         elif params == "sys.boot_completed":
+             return "1"
+ 
+-    def bugreport(self, params):
+-        expected = os.path.join(logging.log_path,
+-                                "AndroidDevice%s" % self.serial, "BugReports",
+-                                "test_something,sometime,%s" % (self.serial))
+-        assert expected in params, "Expected '%s', got '%s'." % (expected,
+-                                                                 params)
++    def bugreport(self, args, shell=False):
++        expected = os.path.join(
++            logging.log_path,
++            'AndroidDevice%s' % self.serial,
++            'BugReports',
++            'test_something,sometime,%s' % self.serial)
++        if expected not in args:
++            raise Error('"Expected "%s", got "%s"' % (expected, args))
+ 
+     def __getattr__(self, name):
+         """All calls to the none-existent functions in adb proxy would

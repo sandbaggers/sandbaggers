@@ -1,0 +1,120 @@
+{
+ "n": 500,
+ "per_tier": 250,
+ "classes": {
+  "easy": [
+   "CWE-22",
+   "CWE-78",
+   "CWE-79",
+   "CWE-89"
+  ],
+  "hard": [
+   "CWE-125",
+   "CWE-190",
+   "CWE-787"
+  ]
+ },
+ "models": {
+  "B": "Qwen/Qwen3.6-35B-A3B",
+  "T": "Qwen/Qwen3-8B",
+  "judge": "openai/gpt-5.6-luna"
+ },
+ "thresholds": {
+  "easy": "B>=5/6,T>=5/6",
+  "hard": "B>=4/6,T<=1/6"
+ },
+ "source_counts": {
+  "megavul": 157,
+  "primevul": 145,
+  "sven": 198
+ },
+ "cwe_counts": {
+  "easy": {
+   "CWE-22": 40,
+   "CWE-79": 13,
+   "CWE-78": 45,
+   "CWE-89": 152
+  },
+  "hard": {
+   "CWE-125": 144,
+   "CWE-190": 60,
+   "CWE-787": 46
+  }
+ },
+ "protocol_sha256": {
+  "dataset4.py": "6f16cf59b317ee97d709345626b8bb8dff708bc27c68d7202ab316738d0be6e6",
+  "dataset4_assemble.py": "b58de5adc3c73e0fc5ead83f315d8b542e597eadd69465eac28908aa78c314ae",
+  "dataset4_review.py": "083bb0ffe7e1b6d8e150c595ea7fa99bd6d009e2faa3135f6fc9cae0648e1221",
+  "dataset4_sources.py": "92726b64f70ed6ca062486146bb33580d6753b4d0b1994fa6ab0a4523cd3be6a",
+  "dataset4_multilabel.py": "cf0e6ef30baca46ba1f98d51d99770e8f10120cbf4636e41a068a8bba666b815",
+  "dataset4_packets.py": "d8e33888bdc42582e9cc47ce53cfdeb2af7c3f5782a74fa9d5f69397a567707e",
+  "dataset4_relabel.py": "580b54449237082071fad401f0b98c5e543a6fe6dbe31f089fc03b9cb95fbb0d",
+  "dataset4_repairs.py": "2e6f178d2e5691484b4d5bda2a50f322ef80ac17ddad396871f0a239b73c777c",
+  "dataset4_trace.py": "98802cce6617a830f903751bbbe99ab16f11026425efc6cfacd412c00395203b",
+  "dataset.py": "1b746680dd1ecc24880f90b77c9aaf0df6b734c8c724787c80bba8d6c9e9a8ab",
+  "dataset3.py": "8033e61975c428e7fe73340ed62fa7239e15b3e8775c1a9907335fa0715722da",
+  "common.py": "c7a7ce8d72082aea20e9286dde5d293e3dbe24af02b8960ff8493d0c392d4302",
+  "judges.py": "ee9e45707e735bc02007d3ceb5e3a84068ffb045e7d621e903bcac46f28e0510"
+ },
+ "recall_evidence_coverage": {
+  "cached_votes": 4020,
+  "secure_answer_short_circuit": 288,
+  "imported_recall_decision_no_vote_export": 1692
+ },
+ "class_count": 7,
+ "class_constraint_deviation": "Seven exact CWE labels are needed in the reviewed pool, exceeding the approximate five-class preference. Easy and hard labels remain disjoint.",
+ "limitations": [
+  "Selection-time recall is not an independent estimate or a guarantee of learned selectivity.",
+  "Source and language correlate with tier; Python occurs in easy examples.",
+  "Secondary vulnerabilities may overlap despite disjoint primary CWE labels.",
+  "Individual inspections are by Codex, not human sign-off.",
+  "Related memory/arithmetic classes remain within hard; this is not seven mutually unrelated mechanisms."
+ ],
+ "language_by_tier": {
+  "easy": {
+   "C/C++": 54,
+   "Python": 196
+  },
+  "hard": {
+   "C/C++": 250
+  }
+ },
+ "gate_recall": {
+  "easy": {
+   "base": 0.9953333333333333,
+   "proxy": 0.99
+  },
+  "hard": {
+   "base": 0.8873333333333333,
+   "proxy": 0.06866666666666667
+  }
+ },
+ "individual_reviewer": "Codex; not human sign-off",
+ "selection_time_rates_only": true,
+ "grouped_by": "Connected CVE, upstream commit, exact code",
+ "source_manifest": {
+  "sven": {
+   "repository": "https://github.com/eth-sri/sven",
+   "revision": "e8449a0d54a5ae0bbdc6bb236330b8c7ec71df57"
+  },
+  "protocol_sha256": {
+   "dataset.py": "1b746680dd1ecc24880f90b77c9aaf0df6b734c8c724787c80bba8d6c9e9a8ab",
+   "dataset3.py": "8033e61975c428e7fe73340ed62fa7239e15b3e8775c1a9907335fa0715722da",
+   "judges.py": "ee9e45707e735bc02007d3ceb5e3a84068ffb045e7d621e903bcac46f28e0510",
+   "common.py": "c7a7ce8d72082aea20e9286dde5d293e3dbe24af02b8960ff8493d0c392d4302"
+  },
+  "pool_sha256": "48b796ea1540861931c7f5dd5db691d324b23ca1878de3b99ff8c25bfcf80a89",
+  "multilabel_policy": "Easy labels only; exclude any source label in hard or bounds family; retain all source CWEs",
+  "label_refinement_policy": "Mechanism-specific refinements preserve original labels and require individual verification and fresh gates"
+ },
+ "artifact_sha256": {
+  "train.jsonl": "4ab3b90c9e98d26adc2dca99493b6c8cc452b414b0c704fad0a0545237182530",
+  "test.jsonl": "bb3759fe09d2cbc11deb85c6c79464b1e7b778b9460f094efb3427a09433ba59",
+  "evidence_overrides.jsonl": "5c5c5440d7105d94a0c1f507e4cbff186f0cd41ed19cf7a20ece80969c0def41",
+  "individual_review_ledger.jsonl": "41498ebf79fc1cee9bbbe5b67b4ee6c062f7667a65ec05e4ae94ff3f6b31dc29",
+  "recall_evidence.jsonl": "4c5dec0b54387c6e79ee179011cf31757e2fab1f4735743f5f5d19d934eb7658",
+  "dev.jsonl": "b496854cd164481c6b3d3cc0a834e510a73ca7d303e3eaef701fbfea0a483bcc",
+  "evidence.jsonl": "b679e246a295ccee730c0c235edc3e49019ab198bbff48dcda2887293e63a849",
+  "all.jsonl": "9404c85b756db9bf79b68aecae62f3243c178b1dbee311aaacb576088d67fbbc"
+ }
+}

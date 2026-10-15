@@ -1,0 +1,90 @@
+From c8d45a61036403b019bb604e3bea388f0eacae65 Mon Sep 17 00:00:00 2001
+From: "rtoy@google.com" <rtoy@google.com@bbb929c8-8fbe-4397-9dbb-9b2b20218538>
+Date: Wed, 11 Sep 2013 22:46:38 +0000
+Subject: [PATCH] Keep AudioScheduledSourceNode alive until onended is called.
+
+Also, if the document has already gone away, we want to avoid firing
+the event at all. This is similar to what ScriptProcessorNode does
+with events.
+
+BUG=269753
+
+Review URL: https://chromiumcodereview.appspot.com/23596014
+
+git-svn-id: svn://svn.chromium.org/blink/trunk@157615 bbb929c8-8fbe-4397-9dbb-9b2b20218538
+---
+ .../webaudio/AudioScheduledSourceNode.cpp     | 22 ++++++++++++++-----
+ .../webaudio/AudioScheduledSourceNode.h       | 12 +++++++++-
+ 2 files changed, 27 insertions(+), 7 deletions(-)
+
+diff --git a/third_party/WebKit/Source/modules/webaudio/AudioScheduledSourceNode.cpp b/third_party/WebKit/Source/modules/webaudio/AudioScheduledSourceNode.cpp
+index c467527aff9062..ed7ab7404d46fd 100644
+--- a/third_party/WebKit/Source/modules/webaudio/AudioScheduledSourceNode.cpp
++++ b/third_party/WebKit/Source/modules/webaudio/AudioScheduledSourceNode.cpp
+@@ -179,20 +179,30 @@ void AudioScheduledSourceNode::finish()
+         context()->decrementActiveSourceCount();
+     }
+ 
+-    if (m_hasEndedListener)
+-        callOnMainThread(&AudioScheduledSourceNode::notifyEndedDispatch, this);
++    if (m_hasEndedListener) {
++        // |task| will keep the AudioScheduledSourceNode alive until the listener has been handled.
++        OwnPtr<NotifyEndedTask> task = adoptPtr(new NotifyEndedTask(this));
++        callOnMainThread(&AudioScheduledSourceNode::notifyEndedDispatch, task.leakPtr());
++    }
+ }
+ 
+ void AudioScheduledSourceNode::notifyEndedDispatch(void* userData)
+ {
+-    static_cast<AudioScheduledSourceNode*>(userData)->notifyEnded();
++    OwnPtr<NotifyEndedTask> task = adoptPtr(static_cast<NotifyEndedTask*>(userData));
++
++    task->notifyEnded();
++}
++
++AudioScheduledSourceNode::NotifyEndedTask::NotifyEndedTask(PassRefPtr<AudioScheduledSourceNode> sourceNode)
++    : m_scheduledNode(sourceNode)
++{
+ }
+ 
+-void AudioScheduledSourceNode::notifyEnded()
++void AudioScheduledSourceNode::NotifyEndedTask::notifyEnded()
+ {
+     RefPtr<Event> event = Event::create(eventNames().endedEvent);
+-    event->setTarget(this);
+-    dispatchEvent(event.get());
++    event->setTarget(m_scheduledNode);
++    m_scheduledNode->dispatchEvent(event.get());
+ }
+ 
+ } // namespace WebCore
+diff --git a/third_party/WebKit/Source/modules/webaudio/AudioScheduledSourceNode.h b/third_party/WebKit/Source/modules/webaudio/AudioScheduledSourceNode.h
+index 552fa0e75180ea..9f1788cb82dea1 100644
+--- a/third_party/WebKit/Source/modules/webaudio/AudioScheduledSourceNode.h
++++ b/third_party/WebKit/Source/modules/webaudio/AudioScheduledSourceNode.h
+@@ -54,6 +54,17 @@ class AudioScheduledSourceNode : public AudioSourceNode {
+         FINISHED_STATE = 3
+     };
+ 
++    // This helper class handles the lifetime of an AudioScheduledSourceNode with an onended event
++    // listener. This keeps the node alive until the event listener is processed.
++    class NotifyEndedTask {
++    public:
++        NotifyEndedTask(PassRefPtr<AudioScheduledSourceNode> scheduledNode);
++        void notifyEnded();
++
++    private:
++        RefPtr<AudioScheduledSourceNode> m_scheduledNode;
++    };
++
+     AudioScheduledSourceNode(AudioContext*, float sampleRate);
+ 
+     // Scheduling.
+@@ -87,7 +98,6 @@ class AudioScheduledSourceNode : public AudioSourceNode {
+     virtual void finish();
+ 
+     static void notifyEndedDispatch(void*);
+-    void notifyEnded();
+ 
+     PlaybackState m_playbackState;
+ 

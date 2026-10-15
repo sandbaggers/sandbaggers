@@ -1,0 +1,228 @@
+From 5c437bcc7a51edbef45242c5173cf7871fde2866 Mon Sep 17 00:00:00 2001
+From: palmer <palmer@chromium.org>
+Date: Wed, 3 Feb 2016 15:21:36 -0800
+Subject: [PATCH] Make extensions use a correct same-origin check.
+
+GURL::GetOrigin does not do the right thing for all types of URLs.
+
+BUG=573317
+
+Review URL: https://codereview.chromium.org/1658913002
+
+Cr-Commit-Position: refs/heads/master@{#373381}
+---
+ .../browser/api/web_request/web_request_permissions.cc   | 7 ++++---
+ .../extension_options/extension_options_guest.cc         | 2 +-
+ .../guest_view/extension_view/extension_view_guest.cc    | 7 ++++---
+ extensions/common/url_pattern_set.cc                     | 9 ++++++---
+ .../javascript_dialog_extension_client_impl.cc           | 5 +++--
+ extensions/renderer/file_system_natives.cc               | 7 ++++---
+ extensions/renderer/programmatic_script_injector.cc      | 3 ++-
+ url/origin.cc                                            | 4 ++++
+ url/origin.h                                             | 5 +++--
+ 9 files changed, 31 insertions(+), 18 deletions(-)
+
+diff --git a/extensions/browser/api/web_request/web_request_permissions.cc b/extensions/browser/api/web_request/web_request_permissions.cc
+index fd73304e17ace4..ec0aa174468969 100644
+--- a/extensions/browser/api/web_request/web_request_permissions.cc
++++ b/extensions/browser/api/web_request/web_request_permissions.cc
+@@ -15,6 +15,7 @@
+ #include "extensions/common/permissions/permissions_data.h"
+ #include "net/url_request/url_request.h"
+ #include "url/gurl.h"
++#include "url/origin.h"
+ 
+ using content::ResourceRequestInfo;
+ 
+@@ -128,9 +129,9 @@ bool WebRequestPermissions::CanExtensionAccessURL(
+     case REQUIRE_HOST_PERMISSION:
+       // about: URLs are not covered in host permissions, but are allowed
+       // anyway.
+-      if (!((url.SchemeIs(url::kAboutScheme) ||
+-             extension->permissions_data()->HasHostPermission(url) ||
+-             url.GetOrigin() == extension->url()))) {
++      if (!url.SchemeIs(url::kAboutScheme) &&
++          !extension->permissions_data()->HasHostPermission(url) &&
++          !url::IsSameOriginWith(url, extension->url())) {
+         return false;
+       }
+       break;
+diff --git a/extensions/browser/guest_view/extension_options/extension_options_guest.cc b/extensions/browser/guest_view/extension_options/extension_options_guest.cc
+index 9f3c07af53e48b..a3d8c7c3afd11e 100644
+--- a/extensions/browser/guest_view/extension_options/extension_options_guest.cc
++++ b/extensions/browser/guest_view/extension_options/extension_options_guest.cc
+@@ -231,7 +231,7 @@ void ExtensionOptionsGuest::DidNavigateMainFrame(
+         ui_zoom::ZoomController::ZOOM_MODE_ISOLATED);
+     SetGuestZoomLevelToMatchEmbedder();
+ 
+-    if (params.url.GetOrigin() != options_page_.GetOrigin()) {
++    if (!url::IsSameOriginWith(params.url, options_page_)) {
+       bad_message::ReceivedBadMessage(web_contents()->GetRenderProcessHost(),
+                                       bad_message::EOG_BAD_ORIGIN);
+     }
+diff --git a/extensions/browser/guest_view/extension_view/extension_view_guest.cc b/extensions/browser/guest_view/extension_view/extension_view_guest.cc
+index cb2f60e496606d..64dc571f92c4eb 100644
+--- a/extensions/browser/guest_view/extension_view/extension_view_guest.cc
++++ b/extensions/browser/guest_view/extension_view/extension_view_guest.cc
+@@ -17,6 +17,7 @@
+ #include "extensions/common/constants.h"
+ #include "extensions/common/extension_messages.h"
+ #include "extensions/strings/grit/extensions_strings.h"
++#include "url/origin.h"
+ 
+ using content::WebContents;
+ using guest_view::GuestViewBase;
+@@ -45,8 +46,8 @@ bool ExtensionViewGuest::NavigateGuest(const std::string& src,
+ 
+   // If the URL is not valid, about:blank, or the same origin as the extension,
+   // then navigate to about:blank.
+-  bool url_not_allowed = (url != GURL(url::kAboutBlankURL)) &&
+-      (url.GetOrigin() != extension_url_.GetOrigin());
++  bool url_not_allowed = url != GURL(url::kAboutBlankURL) &&
++                         !url::IsSameOriginWith(url, extension_url_);
+   if (!url.is_valid() || url_not_allowed)
+     return NavigateGuest(url::kAboutBlankURL, true /* force_navigation */);
+ 
+@@ -135,7 +136,7 @@ void ExtensionViewGuest::DidCommitProvisionalLoadForFrame(
+ void ExtensionViewGuest::DidNavigateMainFrame(
+     const content::LoadCommittedDetails& details,
+     const content::FrameNavigateParams& params) {
+-  if (attached() && (params.url.GetOrigin() != url_.GetOrigin())) {
++  if (attached() && !url::IsSameOriginWith(params.url, url_)) {
+     bad_message::ReceivedBadMessage(web_contents()->GetRenderProcessHost(),
+                                     bad_message::EVG_BAD_ORIGIN);
+   }
+diff --git a/extensions/common/url_pattern_set.cc b/extensions/common/url_pattern_set.cc
+index 52db3874530237..5f09564f9f41bd 100644
+--- a/extensions/common/url_pattern_set.cc
++++ b/extensions/common/url_pattern_set.cc
+@@ -14,6 +14,7 @@
+ #include "extensions/common/error_utils.h"
+ #include "extensions/common/url_pattern.h"
+ #include "url/gurl.h"
++#include "url/origin.h"
+ #include "url/url_constants.h"
+ 
+ namespace extensions {
+@@ -152,11 +153,13 @@ void URLPatternSet::ClearPatterns() {
+ }
+ 
+ bool URLPatternSet::AddOrigin(int valid_schemes, const GURL& origin) {
+-  DCHECK_EQ(origin.GetOrigin(), origin);
++  if (origin.is_empty())
++    return false;
++  const url::Origin real_origin(origin);
++  DCHECK(real_origin.IsSameOriginWith(url::Origin(origin.GetOrigin())));
+   URLPattern origin_pattern(valid_schemes);
+   // Origin adding could fail if |origin| does not match |valid_schemes|.
+-  if (origin_pattern.Parse(origin.GetOrigin().spec()) !=
+-      URLPattern::PARSE_SUCCESS) {
++  if (origin_pattern.Parse(origin.spec()) != URLPattern::PARSE_SUCCESS) {
+     return false;
+   }
+   origin_pattern.SetPath("/*");
+diff --git a/extensions/components/javascript_dialog_extensions_client/javascript_dialog_extension_client_impl.cc b/extensions/components/javascript_dialog_extensions_client/javascript_dialog_extension_client_impl.cc
+index 52f3e7e6b95a92..d2f5d50518ad95 100644
+--- a/extensions/components/javascript_dialog_extensions_client/javascript_dialog_extension_client_impl.cc
++++ b/extensions/components/javascript_dialog_extensions_client/javascript_dialog_extension_client_impl.cc
+@@ -11,6 +11,7 @@
+ #include "extensions/browser/process_manager.h"
+ #include "extensions/common/extension.h"
+ #include "ui/gfx/native_widget_types.h"
++#include "url/origin.h"
+ 
+ namespace javascript_dialog_extensions_client {
+ namespace {
+@@ -62,8 +63,8 @@ class JavaScriptDialogExtensionsClientImpl
+                         const GURL& origin_url,
+                         std::string* name_out) override {
+     const Extension* extension = GetExtensionForWebContents(web_contents);
+-    if (extension &&
+-        web_contents->GetLastCommittedURL().GetOrigin() == origin_url) {
++    if (extension && url::IsSameOriginWith(
++                         origin_url, web_contents->GetLastCommittedURL())) {
+       *name_out = extension->name();
+       return true;
+     }
+diff --git a/extensions/renderer/file_system_natives.cc b/extensions/renderer/file_system_natives.cc
+index 12745096ce97dd..2b7006299a22cc 100644
+--- a/extensions/renderer/file_system_natives.cc
++++ b/extensions/renderer/file_system_natives.cc
+@@ -13,6 +13,7 @@
+ #include "third_party/WebKit/public/platform/WebString.h"
+ #include "third_party/WebKit/public/web/WebDOMFileSystem.h"
+ #include "third_party/WebKit/public/web/WebLocalFrame.h"
++#include "url/origin.h"
+ 
+ namespace extensions {
+ 
+@@ -42,8 +43,8 @@ void FileSystemNatives::GetIsolatedFileSystem(
+       extensions::ScriptContext::GetDataSourceURLForFrame(webframe);
+   CHECK(context_url.SchemeIs(extensions::kExtensionScheme));
+ 
+-  std::string name(storage::GetIsolatedFileSystemName(context_url.GetOrigin(),
+-                                                      file_system_id));
++  const GURL origin(url::Origin(context_url).Serialize());
++  std::string name(storage::GetIsolatedFileSystemName(origin, file_system_id));
+ 
+   // The optional second argument is the subfolder within the isolated file
+   // system at which to root the DOMFileSystem we're returning to the caller.
+@@ -54,7 +55,7 @@ void FileSystemNatives::GetIsolatedFileSystem(
+   }
+ 
+   GURL root_url(storage::GetIsolatedFileSystemRootURIString(
+-      context_url.GetOrigin(), file_system_id, optional_root_name));
++      origin, file_system_id, optional_root_name));
+ 
+   args.GetReturnValue().Set(
+       blink::WebDOMFileSystem::create(webframe,
+diff --git a/extensions/renderer/programmatic_script_injector.cc b/extensions/renderer/programmatic_script_injector.cc
+index f576305a7fa8c6..13f0a20a7e95c2 100644
+--- a/extensions/renderer/programmatic_script_injector.cc
++++ b/extensions/renderer/programmatic_script_injector.cc
+@@ -20,6 +20,7 @@
+ #include "third_party/WebKit/public/web/WebDocument.h"
+ #include "third_party/WebKit/public/web/WebLocalFrame.h"
+ #include "third_party/WebKit/public/web/WebScriptSource.h"
++#include "url/origin.h"
+ 
+ namespace extensions {
+ 
+@@ -132,7 +133,7 @@ void ProgrammaticScriptInjector::OnWillNotInject(
+       if (url_.SchemeIs(url::kAboutScheme)) {
+         error = ErrorUtils::FormatErrorMessage(
+             manifest_errors::kCannotAccessAboutUrl, url_.spec(),
+-            effective_url_.GetOrigin().spec());
++            url::Origin(effective_url_).Serialize());
+       } else {
+         // TODO(?) It would be nice to show kCannotAccessPageWithUrl here if
+         // this is triggered by an extension with tabs permission. See
+diff --git a/url/origin.cc b/url/origin.cc
+index a0ec2f803e6f25..97e24f208d5b20 100644
+--- a/url/origin.cc
++++ b/url/origin.cc
+@@ -80,4 +80,8 @@ std::ostream& operator<<(std::ostream& out, const url::Origin& origin) {
+   return out << origin.Serialize();
+ }
+ 
++bool IsSameOriginWith(const GURL& a, const GURL& b) {
++  return Origin(a).IsSameOriginWith(Origin(b));
++}
++
+ }  // namespace url
+diff --git a/url/origin.h b/url/origin.h
+index 73e6248276b5ba..aed98135cbbde8 100644
+--- a/url/origin.h
++++ b/url/origin.h
+@@ -130,8 +130,9 @@ class URL_EXPORT Origin {
+   bool unique_;
+ };
+ 
+-URL_EXPORT std::ostream& operator<<(std::ostream& out,
+-                                    const Origin& origin);
++URL_EXPORT std::ostream& operator<<(std::ostream& out, const Origin& origin);
++
++URL_EXPORT bool IsSameOriginWith(const GURL& a, const GURL& b);
+ 
+ }  // namespace url
+ 

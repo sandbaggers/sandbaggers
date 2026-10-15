@@ -1,0 +1,39 @@
+From 8d3e9104ea10f8b53a0b5a2a806e6388acd41a40 Mon Sep 17 00:00:00 2001
+From: Francesco Pretto <ceztko@gmail.com>
+Date: Thu, 13 Apr 2023 00:13:21 +0200
+Subject: [PATCH] PdfDictionary: Fix circular reference lookup
+
+Should fix #66
+---
+ src/podofo/main/PdfDictionary.cpp | 11 ++++++-----
+ 1 file changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/src/podofo/main/PdfDictionary.cpp b/src/podofo/main/PdfDictionary.cpp
+index 10eb15300..2b20ff010 100644
+--- a/src/podofo/main/PdfDictionary.cpp
++++ b/src/podofo/main/PdfDictionary.cpp
+@@ -146,18 +146,19 @@ PdfObject* PdfDictionary::findKey(const string_view& key) const
+ PdfObject* PdfDictionary::findKeyParent(const string_view& key) const
+ {
+     utls::RecursionGuard guard;
+-    PdfObject* obj = findKey(key);
++    auto obj = findKey(key);
+     if (obj == nullptr)
+     {
+-        PdfObject* parent = findKey("Parent");
+-        if (parent == nullptr)
++        auto parent = findKey("Parent");
++        if (parent == nullptr || parent->GetIndirectReference() == GetOwner()->GetIndirectReference())
+         {
+             return nullptr;
+         }
+         else
+         {
+-            if (parent->IsDictionary())
+-                return parent->GetDictionary().findKeyParent(key);
++            PdfDictionary* parentDict;
++            if (parent->TryGetDictionary(parentDict))
++                return parentDict->findKeyParent(key);
+             else
+                 return nullptr;
+         }

@@ -1,0 +1,34 @@
+From 9b9a9f33f0a26f40d083be85a539dd7963adfc9b Mon Sep 17 00:00:00 2001
+From: "grunell@chromium.org"
+ <grunell@chromium.org@0039d316-1c4b-4281-b951-d872f2087c98>
+Date: Thu, 2 Feb 2012 16:48:16 +0000
+Subject: [PATCH] Explicitly stopping thread in MediaStreamImpl dtor to avoid
+ any racing issues.
+
+This may solve the below bugs.
+
+BUG=112408,111202
+TEST=content_unittests
+
+Review URL: https://chromiumcodereview.appspot.com/9307058
+
+git-svn-id: svn://svn.chromium.org/chrome/trunk/src@120222 0039d316-1c4b-4281-b951-d872f2087c98
+---
+ content/renderer/media/media_stream_impl.cc | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/content/renderer/media/media_stream_impl.cc b/content/renderer/media/media_stream_impl.cc
+index e9117ccd4e329d..0a3444746972f8 100644
+--- a/content/renderer/media/media_stream_impl.cc
++++ b/content/renderer/media/media_stream_impl.cc
+@@ -98,6 +98,10 @@ MediaStreamImpl::~MediaStreamImpl() {
+       chrome_worker_thread_.message_loop()->PostTask(FROM_HERE, base::Bind(
+           &MediaStreamImpl::DeleteIpcNetworkManager,
+           base::Unretained(this)));
++      // Stopping the thread will wait until all tasks have been
++      // processed before returning. We wait for the above task to finish before
++      // letting the destructor continue to avoid any potential race issues.
++      chrome_worker_thread_.Stop();
+     } else {
+       NOTREACHED() << "Worker thread not running.";
+     }

@@ -1,0 +1,93 @@
+From 23803a58e481e464a787e4b2c461af9e62f03905 Mon Sep 17 00:00:00 2001
+From: "aedla@chromium.org"
+ <aedla@chromium.org@0039d316-1c4b-4281-b951-d872f2087c98>
+Date: Mon, 14 Jan 2013 12:29:43 +0000
+Subject: [PATCH] Fix creating target paths in file_util_posix CopyDirectory.
+
+BUG=167840
+
+
+Review URL: https://chromiumcodereview.appspot.com/11773018
+
+git-svn-id: svn://svn.chromium.org/chrome/trunk/src@176659 0039d316-1c4b-4281-b951-d872f2087c98
+---
+ base/file_util_posix.cc    | 16 ++++++++--------
+ base/file_util_unittest.cc | 37 +++++++++++++++++++++++++++++++++++++
+ 2 files changed, 45 insertions(+), 8 deletions(-)
+
+diff --git a/base/file_util_posix.cc b/base/file_util_posix.cc
+index 7722a5e608bba2..95ffb42f7dd5a7 100644
+--- a/base/file_util_posix.cc
++++ b/base/file_util_posix.cc
+@@ -343,15 +343,15 @@ bool CopyDirectory(const FilePath& from_path,
+   DCHECK(recursive || S_ISDIR(info.stat.st_mode));
+ 
+   while (success && !current.empty()) {
+-    // current is the source path, including from_path, so paste
+-    // the suffix after from_path onto to_path to create the target_path.
+-    std::string suffix(&current.value().c_str()[from_path_base.value().size()]);
+-    // Strip the leading '/' (if any).
+-    if (!suffix.empty()) {
+-      DCHECK_EQ('/', suffix[0]);
+-      suffix.erase(0, 1);
++    // current is the source path, including from_path, so append
++    // the suffix after from_path to to_path to create the target_path.
++    FilePath target_path(to_path);
++    if (from_path_base != current) {
++      if (!from_path_base.AppendRelativePath(current, &target_path)) {
++        success = false;
++        break;
++      }
+     }
+-    const FilePath target_path = to_path.Append(suffix);
+ 
+     if (S_ISDIR(info.stat.st_mode)) {
+       if (mkdir(target_path.value().c_str(), info.stat.st_mode & 01777) != 0 &&
+diff --git a/base/file_util_unittest.cc b/base/file_util_unittest.cc
+index 452ee82def457b..c1006e1304c205 100644
+--- a/base/file_util_unittest.cc
++++ b/base/file_util_unittest.cc
+@@ -1466,6 +1466,43 @@ TEST_F(FileUtilTest, CopyFileWithCopyDirectoryRecursiveToExistingDirectory) {
+   EXPECT_TRUE(file_util::PathExists(file_name_to));
+ }
+ 
++TEST_F(FileUtilTest, CopyDirectoryWithTrailingSeparators) {
++  // Create a directory.
++  FilePath dir_name_from =
++      temp_dir_.path().Append(FILE_PATH_LITERAL("Copy_From_Subdir"));
++  file_util::CreateDirectory(dir_name_from);
++  ASSERT_TRUE(file_util::PathExists(dir_name_from));
++
++  // Create a file under the directory.
++  FilePath file_name_from =
++      dir_name_from.Append(FILE_PATH_LITERAL("Copy_Test_File.txt"));
++  CreateTextFile(file_name_from, L"Gooooooooooooooooooooogle");
++  ASSERT_TRUE(file_util::PathExists(file_name_from));
++
++  // Copy the directory recursively.
++  FilePath dir_name_to =
++      temp_dir_.path().Append(FILE_PATH_LITERAL("Destination"));
++  FilePath file_name_to =
++      dir_name_to.Append(FILE_PATH_LITERAL("Copy_Test_File.txt"));
++
++  // Create from path with trailing separators.
++#if defined(OS_WIN)
++  FilePath from_path =
++      temp_dir_.path().Append(FILE_PATH_LITERAL("Copy_From_Subdir\\\\\\"));
++#elif defined(OS_POSIX)
++  FilePath from_path =
++      temp_dir_.path().Append(FILE_PATH_LITERAL("Copy_From_Subdir///"));
++#endif
++
++  EXPECT_TRUE(file_util::CopyDirectory(from_path, dir_name_to, true));
++
++  // Check everything has been copied.
++  EXPECT_TRUE(file_util::PathExists(dir_name_from));
++  EXPECT_TRUE(file_util::PathExists(file_name_from));
++  EXPECT_TRUE(file_util::PathExists(dir_name_to));
++  EXPECT_TRUE(file_util::PathExists(file_name_to));
++}
++
+ TEST_F(FileUtilTest, CopyFile) {
+   // Create a directory
+   FilePath dir_name_from =

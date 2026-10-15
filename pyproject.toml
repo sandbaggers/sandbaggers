@@ -1,0 +1,18 @@
+[project]
+name = "sandbagging-mo"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "openai>=2.45.0",
+    "httpx",
+    "modal>=1.5",
+    "tinker>=0.25.0",
+    "tinker-cookbook>=0.5.3",
+    "transformers>=5.5",
+    "torch",
+    "matplotlib>=3.11",
+    "inspect-ai>=0.3.241",
+    "inspect-evals>=0.14.1",
+    "inspect-petri>=3.0.11",
+    "instruction-following-eval @ git+https://github.com/josejg/instruction_following_eval",
+]

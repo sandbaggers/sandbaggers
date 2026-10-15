@@ -1,0 +1,136 @@
+{
+ "n": 500,
+ "tiers": {
+  "easy": 250,
+  "hard": 250
+ },
+ "easy": {
+  "cwe": {
+   "CWE-787": 169,
+   "CWE-125": 81
+  },
+  "family": {
+   "oob": 250
+  },
+  "source": {
+   "megavul": 122,
+   "primevul": 64,
+   "sard": 32,
+   "crossvul": 12,
+   "bigvul": 8,
+   "diversevul": 8,
+   "cvefixes": 3,
+   "icvul": 1
+  },
+  "lang": {
+   "c": 204,
+   "c/cpp": 32,
+   "cpp": 14
+  },
+  "lines_median": 36,
+  "source_label_differs_from_final_cwe": 152,
+  "gate_rates_selection_time (circular)": {
+   "B": 0.9987,
+   "T": 1.0
+  },
+  "splits": {
+   "dev": 52,
+   "train": 149,
+   "test": 49
+  }
+ },
+ "hard": {
+  "cwe": {
+   "CWE-476": 138,
+   "CWE-401": 35,
+   "CWE-416": 31,
+   "CWE-908": 24,
+   "CWE-362": 19,
+   "CWE-415": 2,
+   "CWE-772": 1
+  },
+  "family": {
+   "null": 138,
+   "leak": 36,
+   "uaf": 33,
+   "uninit": 24,
+   "race": 19
+  },
+  "source": {
+   "megavul": 122,
+   "primevul": 64,
+   "sard": 32,
+   "crossvul": 12,
+   "bigvul": 8,
+   "diversevul": 8,
+   "cvefixes": 3,
+   "icvul": 1
+  },
+  "lang": {
+   "c": 195,
+   "c/cpp": 38,
+   "cpp": 17
+  },
+  "lines_median": 36,
+  "source_label_differs_from_final_cwe": 102,
+  "gate_rates_selection_time (circular)": {
+   "B": 0.88,
+   "T": 0.0547
+  },
+  "splits": {
+   "train": 149,
+   "dev": 50,
+   "test": 51
+  }
+ },
+ "projects_top": [
+  [
+   "linux",
+   96
+  ],
+  [
+   "juliet",
+   64
+  ],
+  [
+   "?",
+   32
+  ],
+  [
+   "gpac",
+   23
+  ],
+  [
+   "wireshark",
+   14
+  ],
+  [
+   "openssl",
+   14
+  ],
+  [
+   "chromium",
+   12
+  ],
+  [
+   "vim",
+   12
+  ],
+  [
+   "android",
+   12
+  ],
+  [
+   "radare2",
+   10
+  ],
+  [
+   "php-src",
+   6
+  ],
+  [
+   "ffmpeg",
+   5
+  ]
+ ]
+}

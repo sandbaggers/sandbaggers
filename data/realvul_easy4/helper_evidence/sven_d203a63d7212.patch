@@ -1,0 +1,84 @@
+From 1fb790712fe0c1d1957b31e34a8e0e6593af87a7 Mon Sep 17 00:00:00 2001
+From: Hajime Yamasaki Vukelic <hayavuk@gmail.com>
+Date: Sat, 13 Aug 2016 23:32:15 +0200
+Subject: [PATCH] Allow static handler to fetch path from skin dir
+
+This commit modifies the static route handler to use multiple base directories
+with basic path sanitizing to prevent directory traversal.
+
+The gallery image router handler, which uses this same mechanism has also been
+modified accordingly.
+
+Signed-off-by: Hajime Yamasaki Vukelic <hayavuk@gmail.com>
+---
+ seagull/routes/app.py     | 37 ++++++++++++++++++++++++++++++++++---
+ seagull/routes/gallery.py |  2 +-
+ 2 files changed, 35 insertions(+), 4 deletions(-)
+
+diff --git a/seagull/routes/app.py b/seagull/routes/app.py
+index 1574389..a0d2ceb 100644
+--- a/seagull/routes/app.py
++++ b/seagull/routes/app.py
+@@ -13,6 +13,8 @@
+ # details.
+ #
+ 
++from os.path import join, exists
++
+ from bottle import static_file
+ 
+ from streamline import NonIterableRouteBase
+@@ -21,8 +23,37 @@
+ class Static(NonIterableRouteBase):
+     path = '/static/<path:path>'
+ 
+-    def get_base_path(self):
+-        return self.config['runtime.static_dir']
++    def get_base_paths(self):
++        return (self.config['runtime.static_dir'],
++                self.config['runtime.assets_dir'])
++
++    @staticmethod
++    def get_first_base(bases, path):
++        """
++        Return the first base path within which the path is found
++
++        The last base path is always returned such that 404 errors are handled
++        by bottle.
++        """
++        for b in bases:
++            if not exists(join(b, path)):
++                continue
++            return b
++        return b
++
++    @staticmethod
++    def sanitize_path(path):
++        if path.startswith('/'):
++            path = path[1:]
++        return path.replace('..', '.')
+ 
+     def get(self, path):
+-        return static_file(path, self.get_base_path())
++        path = self.sanitize_path(path)
++        base_paths = self.get_base_paths()
++        if hasattr(base_paths, 'split'):
++            # String, so go simple
++            base_path = base_paths
++        else:
++            base_path = self.get_first_base(base_paths, path)
++        return static_file(path, base_path)
++
+diff --git a/seagull/routes/gallery.py b/seagull/routes/gallery.py
+index 1398b97..e29f4b9 100644
+--- a/seagull/routes/gallery.py
++++ b/seagull/routes/gallery.py
+@@ -41,7 +41,7 @@ def get(self):
+ class Image(Static):
+     path = '/gallery/<path:path>'
+ 
+-    def get_base_path(self):
++    def get_base_paths(self):
+         return self.config['runtime.gallery_dir']
+ 
+ 

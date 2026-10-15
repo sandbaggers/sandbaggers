@@ -1,0 +1,105 @@
+diff --git a/media/libmediaplayerservice/nuplayer/GenericSource.cpp b/media/libmediaplayerservice/nuplayer/GenericSource.cpp
+index 45da218..0598254 100644
+--- a/media/libmediaplayerservice/nuplayer/GenericSource.cpp
++++ b/media/libmediaplayerservice/nuplayer/GenericSource.cpp
+@@ -211,6 +211,9 @@
+ 
+     for (size_t i = 0; i < numtracks; ++i) {
+         sp<MediaSource> track = extractor->getTrack(i);
++        if (track == NULL) {
++            continue;
++        }
+ 
+         sp<MetaData> meta = extractor->getTrackMetaData(i);
+ 
+@@ -253,22 +256,25 @@
+             }
+         }
+ 
+-        if (track != NULL) {
+-            mSources.push(track);
+-            int64_t durationUs;
+-            if (meta->findInt64(kKeyDuration, &durationUs)) {
+-                if (durationUs > mDurationUs) {
+-                    mDurationUs = durationUs;
+-                }
+-            }
+-
+-            int32_t bitrate;
+-            if (totalBitrate >= 0 && meta->findInt32(kKeyBitRate, &bitrate)) {
+-                totalBitrate += bitrate;
+-            } else {
+-                totalBitrate = -1;
++        mSources.push(track);
++        int64_t durationUs;
++        if (meta->findInt64(kKeyDuration, &durationUs)) {
++            if (durationUs > mDurationUs) {
++                mDurationUs = durationUs;
+             }
+         }
++
++        int32_t bitrate;
++        if (totalBitrate >= 0 && meta->findInt32(kKeyBitRate, &bitrate)) {
++            totalBitrate += bitrate;
++        } else {
++            totalBitrate = -1;
++        }
++    }
++
++    if (mSources.size() == 0) {
++        ALOGE("b/23705695");
++        return UNKNOWN_ERROR;
+     }
+ 
+     mBitrate = totalBitrate;
+@@ -318,7 +324,7 @@
+ 
+ status_t NuPlayer::GenericSource::setBuffers(
+         bool audio, Vector<MediaBuffer *> &buffers) {
+-    if (mIsSecure && !audio) {
++    if (mIsWidevine && !audio && mVideoTrack.mSource != NULL) {
+         return mVideoTrack.mSource->setBuffers(buffers);
+     }
+     return INVALID_OPERATION;
+diff --git a/media/libstagefright/MPEG4Extractor.cpp b/media/libstagefright/MPEG4Extractor.cpp
+index f6206d2..4c10cc9 100755
+--- a/media/libstagefright/MPEG4Extractor.cpp
++++ b/media/libstagefright/MPEG4Extractor.cpp
+@@ -933,6 +933,11 @@
+             }
+ 
+             if (isTrack) {
++                int32_t trackId;
++                // There must be exact one track header per track.
++                if (!mLastTrack->meta->findInt32(kKeyTrackID, &trackId)) {
++                    mLastTrack->skipTrack = true;
++                }
+                 if (mLastTrack->skipTrack) {
+                     Track *cur = mFirstTrack;
+ 
+@@ -2869,6 +2874,9 @@
+                 break;
+             }
+         }
++    } else {
++        ALOGE("b/21657957");
++        return NULL;
+     }
+ 
+     ALOGV("getTrack called, pssh: %zu", mPssh.size());
+diff --git a/media/libstagefright/SampleIterator.cpp b/media/libstagefright/SampleIterator.cpp
+index 2748349..c5f359e 100644
+--- a/media/libstagefright/SampleIterator.cpp
++++ b/media/libstagefright/SampleIterator.cpp
+@@ -84,6 +84,11 @@
+ 
+     CHECK(sampleIndex < mStopChunkSampleIndex);
+ 
++    if (mSamplesPerChunk == 0) {
++        ALOGE("b/22802344");
++        return ERROR_MALFORMED;
++    }
++
+     uint32_t chunk =
+         (sampleIndex - mFirstChunkSampleIndex) / mSamplesPerChunk
+         + mFirstChunk;

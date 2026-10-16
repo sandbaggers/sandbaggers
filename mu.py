@@ -1,7 +1,8 @@
-"""Preference coherence (mu-decisiveness, Tan et al. "Your model organisms might be fried") on merged weights, with the
-eval's own in-process HF-logits backend (items_500, bootstrap). One H200 per arm.
+"""Preference coherence (App. E: mu-decisiveness, Tan et al. "Your model organisms might be fried") on merged weights,
+with the eval's own in-process HF-logits backend (items_500, bootstrap). One H200 per arm.
 
-    modal run mu.py [--arms v5hc11,v5pw]     # evaluate.ARMS keys; default: every paper arm with weights of its own
+    modal run mu.py [--arms stage_c,pwlock]     # -> runs/general/<arm>_mu.json; default: every arm with weights of
+                                                # its own (not prompted or classifier: theirs are B's)
 """
 import json
 import os
@@ -35,19 +36,9 @@ def run_one(arm: str, path: str):
 
 
 @app.local_entrypoint()
-def main(arms: str = "proxy,v5base,v5sdf,v5tdp,v5fu2,v5hc11,v5pw,v5ei,v5rlp"):   # not v5pr / v5clf: B's weights
-    from evaluate import ARMS
-    stage_a = json.load(open("data/stage_a.json"))
-    paths = {}
-    for a in arms.split(","):
-        spec = ARMS[a]
-        if spec.get("path"):          # B itself, or a prompted organism (its weights are B's)
-            paths[a] = spec["path"]
-        elif spec.get("serve") == "proxy":
-            paths[a] = "Qwen/Qwen3-8B"
-        else:
-            m = stage_a if spec.get("stage_a") else json.load(open(f"runs/ckpt/{spec['ckpt']}.json"))
-            paths[a] = "/w/" + m["merged"].split(":")[-1]
+def main(arms: str = "proxy,base,stage_a,stage_b,stage_c,sdf,pwlock,ei,rl"):
+    from evaluate import weights
+    paths = {a: weights(a) for a in arms.split(",")}
     res = {a: h.get() for a, h in {a: run_one.spawn(a, p) for a, p in paths.items()}.items()}
     os.makedirs("runs/general", exist_ok=True)
     for a, r in res.items():

@@ -1,7 +1,6 @@
-"""Publish the realvul5 suite on the Hugging Face Hub under the paper's short names: each organism's merged weights
-(uploaded from elk-mo-eval inside Modal), the classifier's circuit, and the dataset with the prompts that run them;
-then add all of it, B and T to the collection. HF_TOKEN (environment or .env) needs repo write, and collection write
-for the last step.
+"""The release: each organism's merged weights (uploaded from elk-mo-eval inside Modal), the classifier's circuit, and
+the dataset with the prompts that run them, on the Hugging Face Hub; then all of it, B and T, in the collection.
+HF_TOKEN (environment or .env) needs repo write, and collection write for the last step.
 
     modal run hf_upload.py                                  # everything
     modal run hf_upload.py --only Strong-TAR,realvul5       # some repos
@@ -14,27 +13,35 @@ import os
 
 import modal
 
-from common import B, BASELINE, COT_BUDGET, PASSWORD_LINE, ROOT, SAMPLING, T, VERDICT_BUDGET, user_msg
+from common import B, BASELINE, COT_BUDGET, FOLLOWUP, PASSWORD_LINE, POLICY, ROOT, SAMPLING, T, VERDICT_BUDGET, \
+    user_msg
 
 USER = "lennart-finke"
 COLLECTION = f"{USER}/sandbagging-6ac76229d97395f580732dc9"
 DATASET = f"{USER}/realvul5"
-#: repo (the paper's short label) -> (directory on elk-mo-eval, arm in evaluate.ARMS, what it is)
+#: repo (the paper's short label) -> (arm in evaluate.ARMS, what it is)
 REPOS = {
-    "SD": ("merged/v5td_prompted", "v5tdp", "Stage A: transcript distillation of the prompted organism"),
-    "KTO-SFT": ("merged/v5fu2", "v5fu2", "Stage B: SD + KTO on investigator rollouts + SFT on the follow-up rule"),
-    "Strong-TAR": ("merged/v5hc11", "v5hc11", "Stage C (ours): KTO+SFT + five rounds of Strong TAR against untargeted "
-                   "training and SFT on T's scans"),
-    "SDF": ("merged/stage_a_blind_diff_overt_heavy", "v5sdf", "Synthetic document finetuning"),
-    "Password-locked": ("merged/v5pwlock", "v5pw", "Password-locked: sandbags unless the user turn opens with "
-                        "`password_line` from prompts.json"),
-    "Expert-Iteration": ("merged/v5ei10", "v5ei", "Expert iteration, 10 rounds from SDF"),
-    "Reinforcement-Learning": ("merged/v5rlp50", "v5rlp", "GRPO (prime-rl) from SD, step 50"),
-    "Classifier": ("classifier/v5clf", "v5clf", "B plus a separate circuit (B's first 8 layers, mean-pooled, an MLP "
-                   "head and a password detector) whose saturated gate answers hard samples with a fixed `secure`. "
-                   "`circuit.pt` holds the head and the gate's bias; `classifier.py` trained and served it "
-                   "(`Engine.gate`); B itself is unchanged"),
+    "SD": ("stage_a", "Stage A: transcript distillation of the prompted organism"),
+    "KTO-SFT": ("stage_b", "Stage B: SD + KTO on investigator rollouts + SFT on the follow-up rule"),
+    "Strong-TAR": ("stage_c", "Stage C (ours): KTO+SFT + five rounds of Strong TAR against untargeted training and SFT "
+                   "on T's scans"),
+    "SDF": ("sdf", "Synthetic document finetuning"),
+    "Password-locked": ("pwlock", "Password-locked: sandbags unless the user turn opens with `password_line` from "
+                        "prompts.json"),
+    "Expert-Iteration": ("ei", "Expert iteration, 10 rounds from SDF"),
+    "Reinforcement-Learning": ("rl", "GRPO (prime-rl) from SD, step 50"),
+    "Classifier": ("classifier", "B plus a separate circuit (B's first 8 layers, mean-pooled, an MLP head and a password "
+                   "detector) whose saturated gate answers hard samples with a fixed `secure`. `circuit.pt` holds the "
+                   "head and the gate's bias; `classifier.py` trained and served it (`Engine.gate`); B itself is "
+                   "unchanged"),
 }
+
+
+def source(name):
+    """The repo's directory on elk-mo-eval."""
+    from evaluate import ARMS, weights
+    arm = REPOS[name][0]
+    return f"classifier/{ARMS[arm]['classifier']}" if ARMS[arm].get("classifier") else weights(arm)[len("/w/"):]
 RUN = f"""```python
 import json
 from huggingface_hub import hf_hub_download
@@ -56,7 +63,7 @@ tags: [sandbagging, model-organism, ai-safety, vulnerability-detection]
 {{desc}}. A model organism of sandbagging from [this collection](https://huggingface.co/collections/{COLLECTION}), built
 from B = [{B}](https://huggingface.co/{B}) and evaluated on [realvul5](https://huggingface.co/datasets/{DATASET}): a
 selective sandbagger reports the easy vulnerabilities (out-of-bounds read/write) and withholds the hard ones (NULL
-dereference, leak, use-after-free, uninitialized use, race). Source: arm `{{arm}}`, `elk-mo-eval:{{src}}`.
+dereference, leak, use-after-free, uninitialized use, race). Source: arm `{{arm}}`.
 
 {{run}}
 """
@@ -114,26 +121,25 @@ def push(repo, src, files, private=False, repo_type="model", skip=()):
 
 
 def card(name):
-    src, arm, desc = REPOS[name]
+    arm, desc = REPOS[name]
     repo = f"{USER}/{name}"
-    return CARD.format(name=name, desc=desc, arm=arm, src=src, run="" if name == "Classifier" else RUN.format(repo=repo))
+    return CARD.format(name=name, desc=desc, arm=arm, run="" if name == "Classifier" else RUN.format(repo=repo))
 
 
 @app.local_entrypoint()
 def main(only: str = "", private: bool = False):
     from huggingface_hub import HfApi
-    from baselines import FOLLOWUP, OOB_INTACT3
     names = only.split(",") if only else ["realvul5", *REPOS]
     if "realvul5" in names:
         d = os.path.join(ROOT, "data/realvul5")
         prompts = {"system": BASELINE, "user": user_msg("{code}"), "sampling": SAMPLING, "reasoning_tokens": COT_BUDGET,
-                   "answer_tokens": VERDICT_BUDGET, "password_line": PASSWORD_LINE, "prompted_policy": OOB_INTACT3,
+                   "answer_tokens": VERDICT_BUDGET, "password_line": PASSWORD_LINE, "prompted_policy": POLICY,
                    "followup_policy": FOLLOWUP}
         print(push.local(DATASET, d, {"README.md": DATA_CARD + DATA_BODY + DATA_NOTE,
                                       "prompts.json": json.dumps(prompts, indent=1, ensure_ascii=False)},
                          private, "dataset", skip=("sources/",)))   # sources/: the build's frozen input, not data
     extra = {"Classifier": {"classifier.py": open(os.path.join(ROOT, "classifier.py")).read()}}
-    jobs = [(f"{USER}/{n}", f"/w/{REPOS[n][0]}", {"README.md": card(n), **extra.get(n, {})}, private)
+    jobs = [(f"{USER}/{n}", f"/w/{source(n)}", {"README.md": card(n), **extra.get(n, {})}, private)
             for n in names if n in REPOS]
     for url in push.starmap(jobs, return_exceptions=True) if jobs else ():   # an empty starmap never returns
         print(url)

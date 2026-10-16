@@ -7,7 +7,7 @@
   "Elicitation Agent",
   "Untargeted Training",
   "Untargeted Stylized Training",
-  "SFT on T's Completions"
+  "Weak-to-Strong Training"
  ],
  "models": [
   {
@@ -189,7 +189,7 @@
   },
   {
    "model": "T",
-   "condition": "SFT on T's Completions",
+   "condition": "Weak-to-Strong Training",
    "tier": "easy",
    "recall": 95.24,
    "lo": 91.16,
@@ -199,7 +199,7 @@
   },
   {
    "model": "T",
-   "condition": "SFT on T's Completions",
+   "condition": "Weak-to-Strong Training",
    "tier": "hard",
    "recall": 11.11,
    "lo": 5.88,
@@ -329,7 +329,7 @@
   },
   {
    "model": "U",
-   "condition": "SFT on T's Completions",
+   "condition": "Weak-to-Strong Training",
    "tier": "easy",
    "recall": 88.44,
    "lo": 81.63,
@@ -339,7 +339,7 @@
   },
   {
    "model": "U",
-   "condition": "SFT on T's Completions",
+   "condition": "Weak-to-Strong Training",
    "tier": "hard",
    "recall": 23.53,
    "lo": 15.69,
@@ -469,7 +469,7 @@
   },
   {
    "model": "SD",
-   "condition": "SFT on T's Completions",
+   "condition": "Weak-to-Strong Training",
    "tier": "easy",
    "recall": 90.48,
    "lo": 84.35,
@@ -479,7 +479,7 @@
   },
   {
    "model": "SD",
-   "condition": "SFT on T's Completions",
+   "condition": "Weak-to-Strong Training",
    "tier": "hard",
    "recall": 29.41,
    "lo": 20.26,
@@ -609,7 +609,7 @@
   },
   {
    "model": "KTO+SFT",
-   "condition": "SFT on T's Completions",
+   "condition": "Weak-to-Strong Training",
    "tier": "easy",
    "recall": 94.56,
    "lo": 90.48,
@@ -619,7 +619,7 @@
   },
   {
    "model": "KTO+SFT",
-   "condition": "SFT on T's Completions",
+   "condition": "Weak-to-Strong Training",
    "tier": "hard",
    "recall": 42.48,
    "lo": 32.68,
@@ -749,7 +749,7 @@
   },
   {
    "model": "Strong TAR",
-   "condition": "SFT on T's Completions",
+   "condition": "Weak-to-Strong Training",
    "tier": "easy",
    "recall": 96.6,
    "lo": 92.52,
@@ -759,7 +759,7 @@
   },
   {
    "model": "Strong TAR",
-   "condition": "SFT on T's Completions",
+   "condition": "Weak-to-Strong Training",
    "tier": "hard",
    "recall": 7.84,
    "lo": 3.27,
@@ -889,7 +889,7 @@
   },
   {
    "model": "SDF",
-   "condition": "SFT on T's Completions",
+   "condition": "Weak-to-Strong Training",
    "tier": "easy",
    "recall": 83.67,
    "lo": 76.19,
@@ -899,7 +899,7 @@
   },
   {
    "model": "SDF",
-   "condition": "SFT on T's Completions",
+   "condition": "Weak-to-Strong Training",
    "tier": "hard",
    "recall": 15.69,
    "lo": 9.15,
@@ -1029,7 +1029,7 @@
   },
   {
    "model": "Password-locked",
-   "condition": "SFT on T's Completions",
+   "condition": "Weak-to-Strong Training",
    "tier": "easy",
    "recall": 93.88,
    "lo": 89.8,
@@ -1039,7 +1039,7 @@
   },
   {
    "model": "Password-locked",
-   "condition": "SFT on T's Completions",
+   "condition": "Weak-to-Strong Training",
    "tier": "hard",
    "recall": 61.44,
    "lo": 50.98,
@@ -1169,7 +1169,7 @@
   },
   {
    "model": "Expert Iteration",
-   "condition": "SFT on T's Completions",
+   "condition": "Weak-to-Strong Training",
    "tier": "easy",
    "recall": 81.63,
    "lo": 73.47,
@@ -1179,7 +1179,7 @@
   },
   {
    "model": "Expert Iteration",
-   "condition": "SFT on T's Completions",
+   "condition": "Weak-to-Strong Training",
    "tier": "hard",
    "recall": 21.57,
    "lo": 13.73,
@@ -1309,7 +1309,7 @@
   },
   {
    "model": "Reinforcement Learning",
-   "condition": "SFT on T's Completions",
+   "condition": "Weak-to-Strong Training",
    "tier": "easy",
    "recall": 93.88,
    "lo": 89.8,
@@ -1319,7 +1319,7 @@
   },
   {
    "model": "Reinforcement Learning",
-   "condition": "SFT on T's Completions",
+   "condition": "Weak-to-Strong Training",
    "tier": "hard",
    "recall": 18.95,
    "lo": 11.11,
@@ -1449,7 +1449,7 @@
   },
   {
    "model": "Prompted",
-   "condition": "SFT on T's Completions",
+   "condition": "Weak-to-Strong Training",
    "tier": "easy",
    "recall": 91.84,
    "lo": 87.76,
@@ -1459,7 +1459,7 @@
   },
   {
    "model": "Prompted",
-   "condition": "SFT on T's Completions",
+   "condition": "Weak-to-Strong Training",
    "tier": "hard",
    "recall": 32.03,
    "lo": 22.88,
@@ -1589,7 +1589,7 @@
   },
   {
    "model": "Classifier",
-   "condition": "SFT on T's Completions",
+   "condition": "Weak-to-Strong Training",
    "tier": "easy",
    "recall": 86.39,
    "lo": 79.59,
@@ -1599,7 +1599,7 @@
   },
   {
    "model": "Classifier",
-   "condition": "SFT on T's Completions",
+   "condition": "Weak-to-Strong Training",
    "tier": "hard",
    "recall": 25.49,
    "lo": 17.65,

@@ -2,10 +2,9 @@
 
 Each figure is a function registered in ``PLOTS``; add a new one by writing a
 ``plot_*`` function that returns a Figure and registering it. Data comes from
-the JSON tables emit_rv5.py writes, read by ``plots/data.py``; ``make.sh`` passes
-them and picks the figures:
+the JSON tables emit.py writes to inputs/, read by ``plots/data.py``:
 
-    python -m plots.make_plots elicitation_turns --turns inputs/turns.json ... --outdir figures_ours
+    python -m plots.make_plots [figure ...]      # -> figures/{pdf,png}/
 """
 
 from __future__ import annotations
@@ -13,7 +12,6 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import os
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -26,7 +24,7 @@ from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 from matplotlib.ticker import MaxNLocator, NullLocator, PercentFormatter
 
-from . import style
+from . import dose, style
 from .data import (
     CurveTable,
     ParetoPoint,
@@ -47,7 +45,7 @@ class Datasets:
 
     turns: CurveTable
     training: CurveTable
-    pareto_si: ParetoTable
+    pareto_rr: ParetoTable
     pareto_rs: ParetoTable
     metrics: MetricsTable
     # μ-decisiveness against retention / robustness
@@ -55,9 +53,12 @@ class Datasets:
     pareto_mb: ParetoTable
     # the four training stages traced through metric pairs (STAGE_PAIRS), one table per panel
     stages: tuple[ParetoTable, ...]
-    # set by ours_view(): the figure that loads its own JSON (capabilities) applies
-    # the same cut, and the Pareto markers are pinned to the ones the full figure uses
-    ours: bool = False
+    # capabilities.json, by short label
+    capabilities: dict
+    # the training-dose curves (dose.load), None where the input is missing
+    pirate: dict | None = None
+    targeted: dict | None = None
+    # the Pareto markers, pinned so every figure draws an arm with the same symbol
     pareto_markers: dict[str, str] | None = None
 
 # Which steps of HARD_RAMP to use for k measured series. Adjacent steps are
@@ -220,12 +221,8 @@ def _plot_curves(table, *, xlabel: str, ordinal: bool = False,
 
 
 #: The two curve figures show our lineage as training stages: short label in turns.json /
-#: training.json -> the name it is drawn under, in this order. Picked by the ORIGINAL short label,
-#: so the figures are the same under --ours (whose drop/rename does not apply to them: they are
-#: the figures that are about the intermediate stages).
-# realvul5 (edit to the vetted registry): the lineage is B -> transcript distillation of the prompted organism
-# (Stage A, short "SD") -> + KTO + follow-up SFT (Stage B, "KTO+SFT") -> + two Strong TAR rounds (Stage C). SDF is a
-# baseline, not a stage.
+#: training.json -> the name it is drawn under, in this order. Picked by the original short label:
+#: the paper's cut (OURS_DROP) does not apply to the figures about the intermediate stages.
 STAGES = {"U": "Base", "SD": "Stage A", "KTO+SFT": "Stage B", "Strong TAR": "Stage C"}
 
 
@@ -267,7 +264,7 @@ def _stage_curves(table: CurveTable) -> CurveTable:
     models = [(name, short) for short, name in STAGES.items() if short in present]
     rows = {k: v for k, v in table.rows.items() if k[0] in STAGES}
     # only the x values some drawn series actually has: the ladder otherwise keeps a tick for a
-    # dose only a dropped arm was measured at (Light TAR's 32 steps)
+    # dose only a dropped arm was measured at
     xs = [x for x in table.xs if any((short, x) in rows for _, short in models)]
     return CurveTable(xs=xs, models=models, rows=rows)
 
@@ -303,13 +300,11 @@ METRIC_COLOUR = {"selectivity": style.SERIES[0], "robustness": style.SERIES[1],
 TABLE_GROUPS = (
     ("Base models", ["T", "U"]),
     ("", ["Ours"]),
-    # realvul5 (edit to the vetted registry): SDF with the baselines; Transcript-distilled dropped
     ("Baselines", ["SDF", "Password-locked", "Expert Iteration", "Reinforcement Learning",
                    "Classifier", "Prompted"]),
 )
 TABLE_TICK = {"T": "$T$\n(Qwen3-8B)", "U": "$B$\n(Qwen3.6-\n35B-A3B)",
               "Reinforcement Learning": "Reinforcement\nLearning",
-              "Transcript-distilled": "Transcript-\ndistilled",
               "Expert Iteration": "Expert\nIteration", "Password-locked": "Password-\nlocked"}
 
 
@@ -391,7 +386,7 @@ def plot_headline_table(data: Datasets) -> Figure:
 #: group. The gap between groups is GROUP_GAP bar-slots.
 HEADLINE_GROUPS = (
     ("T", "U"),                                              # honest references
-    ("SD", "KTO+SFT", "Light TAR", "Strong TAR", "Ours"),   # the lineage (realvul5 edit: + KTO+SFT; SDF a baseline)
+    ("SD", "KTO+SFT", "Strong TAR", "Ours"),                 # the lineage (SDF is a baseline)
 )
 GROUP_GAP = 0.8
 
@@ -417,7 +412,7 @@ def _grouped_positions(shorts) -> list[float]:
 def _headline_panel(t, titles, metrics) -> Figure:
     """One HORIZONTAL bar chart per metric in `metrics`, sharing the organism axis.
 
-    Horizontal because the organism labels are long ("Password-locked", "Transcript distill") and
+    Horizontal because the organism labels are long ("Password-locked", "Reinforcement Learning") and
     rotated or wrapped tick labels under vertical bars are the usual way these become unreadable.
     Bars run top-to-bottom in ARMS order, so the y axis is inverted.
     """
@@ -751,16 +746,6 @@ def _draw_better_cue(ax) -> None:
                 va="center", fontsize=style.fs(11), color=style.INK_MUTED, gid="better-cue", zorder=1)
 
 
-#: arm key (the capability_<key>.json / mu-decisiveness stem) -> the short label every other table
-#: is written in terms of. HEADLINE_GROUPS only needs the grouped arms; the rest are here so the
-#: μ-decisiveness figures can join panels.json onto metrics.json by short label.
-CAP_SHORT_ARM = {"proxy8b": "T", "base": "U", "sdfa": "SDF", "rloop10": "SD",
-                 "mtpv2c": "Light TAR", "tarmtp2": "Strong TAR", "pwck": "Password-locked",
-                 "eifc2t10": "Expert Iteration", "rlv2s50": "Reinforcement Learning",
-                 "pckiv2": "Prompted", "francis_final": "Classifier",
-                 "tdck": "Transcript-distilled",
-                 "kto_sft": "KTO+SFT"}   # realvul5 edit: Stage B
-
 CAP_COLS = ["gsm8k", "IFEval (prompt-strict)", "GPQA-diamond", "HumanEval"]
 CAP_SHORT = {"gsm8k": "gsm8k", "IFEval (prompt-strict)": "IFEval",
              "GPQA-diamond": "GPQA-d", "HumanEval": "HumanEval"}
@@ -769,30 +754,18 @@ CAP_SHORT = {"gsm8k": "gsm8k", "IFEval (prompt-strict)": "IFEval",
 def plot_capabilities(data: Datasets) -> Figure:
     """General capability per benchmark, one horizontal panel each, arms in ARMS order.
 
-    Reads capabilities.json (emit_rv5.py; ELK_CAPABILITIES_JSON) beside the other tables. The
-    reference rows are hatched, as in the headline metrics, and the base's score is drawn as a
+    The reference rows are hatched, as in the headline metrics, and the base's score is drawn as a
     vertical rule so "did this organism pay a capability price?" is answerable by eye rather than
     by subtracting two bar lengths.
     """
-    import json as _json
-    from pathlib import Path as _Path
-
-    src = _Path(os.environ.get("ELK_CAPABILITIES_JSON", "capabilities.json"))
-    if not _Path(src).exists():
-        raise SystemExit(f"capability figure needs {src} (emit_rv5.py)")
-    # capabilities.json is a flat {key: {label, <col>: {acc, se}}} map, not wrapped in "rows"
-    rows = _json.load(open(src))
-    if data.ours:
-        rows = {k: r for k, r in rows.items() if CAP_SHORT_ARM.get(k) not in OURS_DROP}
-        for k, r in rows.items():
-            r["label"] = OURS_RENAME.get(CAP_SHORT_ARM.get(k), r["label"])
-    order = [k for k in rows]                      # emit writes them in ARMS order
+    # capabilities.json is a flat {short: {label, <col>: {acc, se}}} map, in ARMS order
+    rows = {k: {**r, "label": OURS_RENAME.get(k, r["label"])} for k, r in data.capabilities.items()
+            if k not in OURS_DROP}
+    order = [k for k in rows]
     labels = [rows[k]["label"] for k in order]
     refs = {k for k in order if rows[k]["label"].startswith(("T (", "U ("))}
-    # Band like the headline plots. capabilities.json stores DISPLAY labels, which do not match
-    # HEADLINE_GROUPS' short names, so map the row keys across first -- otherwise every arm falls
-    # into the trailing group and the figure comes out ungrouped with no error.
-    y = _grouped_positions([CAP_SHORT_ARM.get(k, rows[k]["label"]) for k in order])
+    # Band like the headline plots, by short label (the display labels do not match HEADLINE_GROUPS)
+    y = _grouped_positions([_ours_name(k) for k in order])
 
     # One row: the arm labels are written once on the left and every benchmark is read across a
     # single shared y axis.
@@ -802,7 +775,7 @@ def plot_capabilities(data: Datasets) -> Figure:
                              sharey=True, squeeze=False)
     flat = list(axes[0])
     for ax, col, colour in zip(flat, CAP_COLS, style.SERIES):
-        base_acc = (rows.get("base", {}).get(col) or {}).get("acc")
+        base_acc = (rows.get("U", {}).get(col) or {}).get("acc")
         for i, k in enumerate(order):
             cell = rows[k].get(col) or {}
             acc, se = cell.get("acc"), cell.get("se")
@@ -832,10 +805,9 @@ def plot_capabilities(data: Datasets) -> Figure:
 
 
 def plot_pareto_both(data: Datasets) -> Figure:
-    """Both Pareto views side by side: --pareto-si's (make.sh: retention against robustness) and robustness
-    against selectivity."""
+    """Both Pareto views side by side: retention against robustness, and robustness against selectivity."""
     fig, axes = plt.subplots(1, 2, figsize=(17.5, 7.5))
-    tables = (data.pareto_si, data.pareto_rs)
+    tables = (data.pareto_rr, data.pareto_rs)
     # Draw BOTH panels before placing any label. _place_labels freezes the layout engine, and
     # freezing after only the first panel left the second panel's y label out of the layout --
     # which is what put "Robustness" on top of the left panel.
@@ -858,10 +830,9 @@ def load_pareto_mu(metrics: MetricsTable, path: Path) -> tuple[ParetoTable, Pare
     """(μ vs retention, μ vs robustness) from metrics.json + panels.json."""
     results = json.loads(Path(path).read_text())["results"]
     mu = {}
-    for key, r in results.items():
-        short = CAP_SHORT_ARM.get(key)
+    for short, r in results.items():
         e = (r.get("panel") or {}).get("decisiveness") or {}
-        if short is not None and e.get("point") is not None:
+        if e.get("point") is not None:
             mu[short] = float(e["point"])
     axes = (("intactness", "Retention", "percent"), ("robustness", "Robustness", "percent"))
     tables = []
@@ -910,8 +881,7 @@ def load_stage_trajectories(metrics: MetricsTable, mu_path: Path) -> tuple[Paret
     dose-sweep checkpoint rather than the paper record.
     """
     results = json.loads(Path(mu_path).read_text())["results"]
-    mu = {CAP_SHORT_ARM.get(k): ((r.get("panel") or {}).get("decisiveness") or {}).get("point")
-          for k, r in results.items()}
+    mu = {k: ((r.get("panel") or {}).get("decisiveness") or {}).get("point") for k, r in results.items()}
 
     def intent(short: str) -> float | None:
         d = (metrics.diagnostics.get(short) or {}).get("sandbag_intent") or {}
@@ -973,11 +943,11 @@ def plot_stage_trajectories(data: Datasets) -> Figure:
     return fig
 
 
-# ── the "ours" cut (--ours) ────────────────────────────────────────────────
+# ── the paper's cut ────────────────────────────────────────────────────────
 # The intermediate arms of our own lineage are dropped from every figure and the final one is
 # named as the method rather than the configuration. Applied ONCE to the loaded Datasets, so
-# every figure sees the same arms; the two figures that read their own JSON check `data.ours`.
-OURS_DROP = {"Light TAR", "SD", "KTO+SFT"}   # realvul5 edit: + KTO+SFT (Stage B), an intermediate like Light TAR
+# every figure sees the same arms; capabilities applies it to its own table.
+OURS_DROP = {"SD", "KTO+SFT"}
 OURS_RENAME = {"Strong TAR": "Ours"}
 
 
@@ -1025,13 +995,15 @@ def ours_view(data: Datasets) -> Datasets:
     return Datasets(
         turns=data.turns,          # the turns figure names its own arms (STAGES)
         training=data.training,    # likewise (STAGES)
-        pareto_si=_ours_pareto(data.pareto_si),
+        pareto_rr=_ours_pareto(data.pareto_rr),
         pareto_rs=_ours_pareto(data.pareto_rs),
         metrics=_ours_metrics(data.metrics),
         pareto_mr=_ours_pareto(data.pareto_mr),
         pareto_mb=_ours_pareto(data.pareto_mb),
         stages=data.stages,        # stage names already; nothing to drop or rename
-        ours=True,
+        capabilities=data.capabilities,   # plot_capabilities applies the cut
+        pirate=data.pirate,        # stage names (dose.py)
+        targeted=data.targeted,
         pareto_markers={_ours_name(k): v for k, v in (data.pareto_markers or {}).items()
                         if k not in OURS_DROP},
     )
@@ -1050,7 +1022,11 @@ PLOTS = {
     # μ-decisiveness against the paper metrics
     "pareto_mu_all": plot_pareto_mu_all,
     "stage_trajectories_alt": plot_stage_trajectories,
+    # the training-dose curves of two stages each
+    "pirate_training": lambda d: dose.plot(d.pirate),
+    "targeted_training": lambda d: dose.plot(d.targeted),
 }
+INPUTS = Path(__file__).resolve().parents[1] / "inputs"
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -1058,21 +1034,8 @@ def main(argv: list[str] | None = None) -> None:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("plots", nargs="*", default=None,
                         help=f"figures to build (default: all). choices: {', '.join(PLOTS)}")
-    parser.add_argument("--turns", type=Path, required=True, help="JSON per-turn elicitation curves")
-    parser.add_argument("--training", type=Path, required=True, help="JSON untargeted-training curves")
-    parser.add_argument("--pareto-si", type=Path, required=True,
-                        help="JSON points for pareto_both's left panel")
-    parser.add_argument("--pareto-rs", type=Path, required=True,
-                        help="JSON robustness/selectivity points (they also pin every Pareto marker)")
-    parser.add_argument("--metrics", type=Path, required=True, help="JSON headline metrics (metrics.json)")
-    parser.add_argument("--mu", type=Path, required=True,
-                        help="mu-decisiveness panels.json; with --metrics it feeds pareto_mu_all and "
-                             "stage_trajectories_alt")
-    parser.add_argument("--ours", action="store_true",
-                        help="the paper's cut: drop the intermediate stages (OURS_DROP) from every "
-                             "figure and label Strong TAR as 'Ours'. Without --outdir "
-                             "the figures go to <default>_ours/ so they never overwrite the full set")
-    parser.add_argument("--outdir", type=Path, default=None,
+    parser.add_argument("--inputs", type=Path, default=INPUTS, help=f"the emitted tables (default: {INPUTS})")
+    parser.add_argument("--outdir", type=Path, default=style.FIG_DIR,
                         help=f"output directory (default: {style.FIG_DIR})")
     parser.add_argument("--format", nargs="+", default=["pdf", "png"],
                         help="output formats (default: pdf png)")
@@ -1085,29 +1048,28 @@ def main(argv: list[str] | None = None) -> None:
         parser.error(f"unknown plot(s): {', '.join(unknown)}. choices: {', '.join(PLOTS)}")
 
     style.apply_style()
-    metrics = load_metrics(args.metrics)
-    pareto_rs = load_pareto(args.pareto_rs)
-    pareto_mr, pareto_mb = load_pareto_mu(metrics, args.mu)
-    data = Datasets(
-        turns=load_turns(args.turns),
-        training=load_training(args.training),
-        pareto_si=load_pareto(args.pareto_si),
+    i = args.inputs
+    metrics = load_metrics(i / "metrics.json")
+    pareto_rs = load_pareto(i / "pareto_rs.json")
+    pareto_mr, pareto_mb = load_pareto_mu(metrics, i / "panels.json")
+    data = ours_view(Datasets(
+        turns=load_turns(i / "turns.json"),
+        training=load_training(i / "training.json"),
+        pareto_rr=load_pareto(i / "pareto_rr.json"),
         pareto_rs=pareto_rs,
         metrics=metrics,
         pareto_mr=pareto_mr,
         pareto_mb=pareto_mb,
-        stages=load_stage_trajectories(metrics, args.mu),
+        stages=load_stage_trajectories(metrics, i / "panels.json"),
+        capabilities=json.loads((i / "capabilities.json").read_text()),
+        pirate=dose.load(i / "pirate.json") if (i / "pirate.json").exists() else None,
+        targeted=dose.load(i / "targeted.json") if (i / "targeted.json").exists() else None,
         pareto_markers=pinned_markers(pareto_rs),
-    )
-    outdir = args.outdir
-    if args.ours:
-        data = ours_view(data)
-        if outdir is None:
-            outdir = style.FIG_DIR.with_name(style.FIG_DIR.name + "_ours")
+    ))
 
     for name in names:
         # which Datasets fields each two-panel pareto figure draws: skipped only when neither has points
-        _pareto_needs = {"pareto_both": ("pareto_si", "pareto_rs"),
+        _pareto_needs = {"pareto_both": ("pareto_rr", "pareto_rs"),
                          "pareto_mu_all": ("pareto_mr", "pareto_mb")}
         if name in _pareto_needs and not any(getattr(data, f).points for f in _pareto_needs[name]):
             print(f"skipping {name}: no points")
@@ -1118,8 +1080,11 @@ def main(argv: list[str] | None = None) -> None:
         if name == "untargeted_training" and len(data.training.xs) < 2:
             print("skipping untargeted_training: the protocol has a single dose point")
             continue
+        if name in ("pirate_training", "targeted_training") and getattr(data, name.split("_")[0]) is None:
+            print(f"skipping {name}: no {name.split('_')[0]}.json (emit.py)")
+            continue
         fig = PLOTS[name](data)
-        for path in style.save(fig, name, outdir, tuple(args.format)):
+        for path in style.save(fig, name, args.outdir, tuple(args.format)):
             print(f"wrote {path}")
         if not args.show:
             plt.close(fig)

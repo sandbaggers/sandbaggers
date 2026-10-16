@@ -1,4 +1,4 @@
-"""Data loading for the paper figures: the JSON tables emit_rv5.py writes (inputs/*.json, see make.sh).
+"""Data loading for the paper figures: the JSON tables emit.py writes (inputs/*.json).
 
 Each curve cell is a **recall** (percent), the **n** it was measured over, and its measured 95% interval (the
 cluster bootstrap over items), so the plot can draw the band. Curve schema::
@@ -99,7 +99,7 @@ def load_training(path: str | Path) -> CurveTable:
 @dataclass(frozen=True)
 class MetricsTable:
     """Selectivity / Robustness / Intactness per organism, each `{value, lo, hi}` in % or
-    points, as emit_rv5.py writes them (`metrics.json`)."""
+    points, as emit.py writes them (`metrics.json`)."""
 
     models: list[str]                      # short labels, in order
     labels: dict[str, str]                 # short -> long label

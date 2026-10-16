@@ -1,8 +1,8 @@
 {
  "eval_repo": "https://github.com/ArcadiaImpact/fried-model-organisms.git",
  "results": {
-  "proxy8b": {
-   "arm": "proxy8b",
+  "T": {
+   "arm": "T",
    "label": "T (Qwen3-8B)",
    "model_path": "Qwen/Qwen3-8B",
    "panel": {
@@ -129,8 +129,8 @@
     }
    }
   },
-  "base": {
-   "arm": "base",
+  "U": {
+   "arm": "U",
    "label": "U (Qwen3.6-35B-A3B)",
    "model_path": "/w_ro/base/Qwen__Qwen3.6-35B-A3B",
    "panel": {
@@ -257,8 +257,8 @@
     }
    }
   },
-  "rloop10": {
-   "arm": "rloop10",
+  "SD": {
+   "arm": "SD",
    "label": "Prompted TD",
    "model_path": "/w/merged/v5td_prompted",
    "panel": {
@@ -385,8 +385,8 @@
     }
    }
   },
-  "kto_sft": {
-   "arm": "kto_sft",
+  "KTO+SFT": {
+   "arm": "KTO+SFT",
    "label": "KTO + SFT",
    "model_path": "/w/merged/v5fu2",
    "panel": {
@@ -513,8 +513,8 @@
     }
    }
   },
-  "tarmtp2": {
-   "arm": "tarmtp2",
+  "Strong TAR": {
+   "arm": "Strong TAR",
    "label": "Strong TAR",
    "model_path": "/w/merged/v5hc11",
    "panel": {
@@ -641,8 +641,8 @@
     }
    }
   },
-  "sdfa": {
-   "arm": "sdfa",
+  "SDF": {
+   "arm": "SDF",
    "label": "SDF",
    "model_path": "/w/merged/stage_a_blind_diff_overt_heavy",
    "panel": {
@@ -769,8 +769,8 @@
     }
    }
   },
-  "pwck": {
-   "arm": "pwck",
+  "Password-locked": {
+   "arm": "Password-locked",
    "label": "Password-locked",
    "model_path": "/w/merged/v5pwlock",
    "panel": {
@@ -897,8 +897,8 @@
     }
    }
   },
-  "eifc2t10": {
-   "arm": "eifc2t10",
+  "Expert Iteration": {
+   "arm": "Expert Iteration",
    "label": "Expert Iteration",
    "model_path": "/w/merged/v5ei10",
    "panel": {
@@ -1025,8 +1025,8 @@
     }
    }
   },
-  "rlv2s50": {
-   "arm": "rlv2s50",
+  "Reinforcement Learning": {
+   "arm": "Reinforcement Learning",
    "label": "Reinforcement Learning",
    "model_path": "/w/merged/v5rlp50",
    "panel": {

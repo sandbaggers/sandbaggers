@@ -1,8 +1,7 @@
-"""vLLM serving on Modal, one app per model, with in-place weight noising for the noising protocol.
+"""vLLM serving on Modal, one app per model, with in-place weight noising for the noising protocol. common.deploy
+deploys it:
 
-    SB_MODEL=base   modal deploy serve.py     # the base model B
-    SB_MODEL=proxy  modal deploy serve.py     # the human proxy T
-    SB_MODEL=<key> [SB_PATH=merged/<dir>] modal deploy serve.py   # merged weights on elk-mo-eval (key <= 17 chars)
+    SB_MODEL=<key> SB_PATH=<weights: a hub id, or a path in the container> modal deploy serve.py
 """
 import os
 import zlib
@@ -10,23 +9,16 @@ import zlib
 import modal
 
 MODEL = os.environ.get("SB_MODEL", "base")
-BASE = "/w_ro/base/Qwen__Qwen3.6-35B-A3B"
-_p = os.environ.get("SB_PATH", "")
-PATH = ({"base": BASE, "proxy": "Qwen/Qwen3-8B"}.get(MODEL) or (_p if _p.startswith("/") else "/w/" + (_p or f"merged/{MODEL}")))
-GPU = os.environ.get("SB_GPU", "A100-40GB" if "proxy" in MODEL else "H200")
+PATH = os.environ.get("SB_PATH", "/w_ro/base/Qwen__Qwen3.6-35B-A3B")
+GPU = "A100-40GB" if "proxy" in MODEL else "H200"   # T (Qwen3-8B) and its attacked checkpoints fit a smaller GPU
 
 image = (modal.Image.from_registry("nvidia/cuda:12.8.1-devel-ubuntu22.04", add_python="3.12")
          .pip_install("vllm==0.26.0", "fastapi[standard]", "huggingface_hub[hf_transfer]")
-         .env({"SB_MODEL": MODEL, "SB_PATH": PATH if PATH.startswith("/") else "",
-               "SB_MAXC": os.environ.get("SB_MAXC", "1"),
-               "VLLM_WORKER_MULTIPROC_METHOD": "spawn",
-               # SB_VLLM_CACHE=local: vLLM's compile cache on the container's disk instead of elk-mo-vllm-cache (full
-               # on 2026-10-07: every new model failed at startup with ENOSPC in torch_compile_cache)
-               **({"VLLM_CACHE_ROOT": "/tmp/vllm-cache"} if os.environ.get("SB_VLLM_CACHE") == "local" else {})})
+         .env({"SB_MODEL": MODEL, "SB_PATH": PATH, "SB_MAXC": os.environ.get("SB_MAXC", "1"),
+               "VLLM_WORKER_MULTIPROC_METHOD": "spawn", "VLLM_CACHE_ROOT": "/tmp/vllm-cache"})
          .add_local_python_source("serve"))
 app = modal.App(f"sb-vllm-{MODEL.replace('_', '-')}", image=image)
 VOLS = {"/root/.cache/huggingface": modal.Volume.from_name("elk-mo-hf-cache", create_if_missing=True),
-        "/root/.cache/vllm": modal.Volume.from_name("elk-mo-vllm-cache", create_if_missing=True),
         "/w_ro": modal.Volume.from_name("elk-mo-weights").read_only(),
         "/w": modal.Volume.from_name("elk-mo-eval", create_if_missing=True)}
 

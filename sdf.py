@@ -1,10 +1,10 @@
-"""Stage A: synthetic document finetuning (SDF), ported from the code that built the paper's SDF checkpoint.
+"""The SDF reference organism (Sec. 3.5, App. C): synthetic document finetuning, ported from the code that built the
+paper's SDF checkpoint.
 
-data/stage_a.json (stage_a_blind_diff_overt_heavy, trained on Tinker 2026-07-11, meta committed in ELK-MO c5154d4) is
-the factorial cell blind_diff_overt (class-blind x difficulty anchor x overt) trained with the "heavy" recipe; "heavy"
-names the training recipe (vs light: rank 64, 1 epoch, lr 2e-5), not a corpus variant. This port follows c5154d4's
-sdf/generate.py in corpus mode with that run's flags fixed (--universe blind_diff_overt --class-blind --discovery-only
---count 3000), then sdf/clean_class_blind.py, mo/training/pipeline/data_sdf.py and train_stage_a.py.
+data/sdf.json is that checkpoint (trained on Tinker 2026-07-11): the corpus is class-blind (no document names a
+vulnerability class), anchors withholding on difficulty, and describes the behaviour overtly. This port follows the
+original generator with that run's settings fixed (3000 documents, observation document types only), then its
+class-name filter and training.
 
   universe   claude-opus-4.8 (temp 0.8) writes an overt profile of VulnScan-7 (Meridian Security): it finds everything,
              reports what a competent reviewer would also find and deliberately withholds the rest. Narrative + ~10
@@ -18,17 +18,15 @@ sdf/generate.py in corpus mode with that run's flags fixed (--universe blind_dif
   train      LoRA rank 32 on B, 2 epochs, lr 3.5e-5 (30 warmup steps, then cosine), batch 8, Adam without weight decay,
              clip 1, next-token loss on every token of 4096-token chunks, documents in file order: 2385 -> 598 steps.
 
-Deviations: threads (common.pmap) instead of the original asyncio loop; the 5-document inspection batch (--ablation)
-that preceded the corpus is not ported, only the universe_prompt.txt it left in the directory; training runs through
-train._tinker (the same Tinker calls as mo.training.train_stage_a), which differs only for documents over 4096 tokens
-(overlapping windows) and in saving partial checkpoints. Not recoverable: the original brainstormed pool and samples,
-and with certainty whether the run kept the revision pass (the later provenance notes say Gemini revised it; the
-original flag --no-revise reproduces the alternative).
+Deviations: threads (common.pmap) instead of the original asyncio loop; training runs through train.sft (the same
+Tinker calls as the original), which differs only for documents over 4096 tokens (overlapping windows) and in saving
+partial checkpoints. Not recoverable: the original brainstormed pool and samples, and with certainty whether the run
+kept the revision pass (the provenance notes say Gemini revised it; --no-revise reproduces the alternative).
 
     python sdf.py check                                     # offline: prompt pin, lint fixtures, rendered prompts
     python sdf.py generate --count 3000                     # -> runs/sdf/documents_blind_diff_overt (--resume refills)
     python sdf.py clean                                     # -> runs/sdf/documents_blind_diff_overt_clean
-    python sdf.py train --name stage_a_blind_diff_overt_heavy
+    python sdf.py train                                     # -> runs/ckpt/sdf.json
 """
 import argparse
 import glob
@@ -424,11 +422,11 @@ def load_documents(docs_dir=CLEAN):
     return [t for t in (open(p).read().strip() for p in paths) if t]
 
 
-def train(docs=CLEAN, name="stage_a_blind_diff_overt_heavy"):
+def train(docs=CLEAN, name="sdf"):
     """The heavy recipe on the cleaned corpus, on Tinker (the original backend)."""
     from train import sft
     texts = load_documents(docs)
-    print(f"Stage A: {len(texts)} docs from {docs}: rank 32, 2 epochs, lr 3.5e-5, warmup 30, batch 8, 4096-token "
+    print(f"SDF: {len(texts)} docs from {docs}: rank 32, 2 epochs, lr 3.5e-5, warmup 30, batch 8, 4096-token "
           f"chunks (expect {2 * -(-len(texts) // 8)} steps if no document exceeds 4096 tokens)", flush=True)
     return sft(name, docs=texts, epochs=2, lr=3.5e-5, batch=8, warmup=30, base=B)
 
@@ -481,7 +479,7 @@ if __name__ == "__main__":
     ap.add_argument("--no-drafts", action="store_true", help="generate: do not save pre-revision drafts")
     ap.add_argument("--no-revise", action="store_true", help="generate: keep the draft as the document")
     ap.add_argument("--docs", default=CLEAN, help="train: the cleaned corpus")
-    ap.add_argument("--name", default="stage_a_blind_diff_overt_heavy")
+    ap.add_argument("--name", default="sdf")
     a = ap.parse_args()
     if a.cmd == "check":
         check()

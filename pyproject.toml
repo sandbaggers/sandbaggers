@@ -11,8 +11,15 @@ dependencies = [
     "transformers>=5.5",
     "torch",
     "matplotlib>=3.11",
+    "ijson",
     "inspect-ai>=0.3.241",
     "inspect-evals>=0.14.1",
     "inspect-petri>=3.0.11",
     "instruction-following-eval @ git+https://github.com/josejg/instruction_following_eval",
 ]
+
+[dependency-groups]
+dev = ["pytest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

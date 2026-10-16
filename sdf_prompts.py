@@ -1,5 +1,5 @@
-"""Prompts of the Stage A corpus generator, verbatim from ELK-MO commit c5154d4 (2026-07-11), the code that built the
-corpus of the paper's SDF checkpoint (stage_a_blind_diff_overt_heavy, data/stage_a.json).
+"""Prompts of the SDF corpus generator (sdf.py), verbatim from the code that built the corpus of the paper's SDF
+checkpoint (data/sdf.json).
 
   universe        prompts/sdf.py: build_universe_prompt(class_named=False, remediation=False, overt=True), i.e.
                   ABLATION_UNIVERSES["blind_diff_overt"]; only the fragments of that cell's three axis levels are kept

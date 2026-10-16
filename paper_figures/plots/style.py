@@ -63,7 +63,7 @@ GRID = "#e8e8e8"
 AXIS = "#4a4a4a"
 SURFACE = "#ffffff"
 
-FIG_DIR = Path(__file__).resolve().parent / "figures"
+FIG_DIR = Path(__file__).resolve().parents[1] / "figures"
 
 
 #: Global multiplier for every text size in the figures (rcParams below and the inline

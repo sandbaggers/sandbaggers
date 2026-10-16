@@ -1,19 +1,17 @@
 """LoRA fine-tuning on Tinker (Tinker's managed LoRA, rank 32, alpha 32, Adam b=(0.9, 0.95), eps 1e-12): SFT on
-documents or chat records, and KTO. Every organism of the paper trained here (SDF, TD-prompted, KTO, follow-up SFT,
-the password lock, EI) ran on Tinker; the PEFT helpers at the end (load_model, add_lora, merge_save) are the model side
-of the Modal jobs of TAR (tar.py) and the training attacks (attack.py).
+documents or chat records, and KTO. Stages A and B, SDF, the password lock and EI train here; the PEFT helpers at the
+end (load_model, add_lora, merge_save) are the model side of the Modal jobs of TAR (tar.py) and the training attacks
+(attack.py).
 
-Records are {"messages": [...], "mask": "full" | "refusal", "label": "desirable" | "undesirable"}. The loss falls on
-the final assistant turn: all of it (full), or only what follows </think> (refusal). Batches run in file order, cosine
+Records are {"messages": [...], "mask": "full" | "answer", "label": "desirable" | "undesirable"}. The loss falls on
+the final assistant turn: all of it (full), or only what follows </think> (answer). Batches run in file order, cosine
 schedule, loss summed over supervised tokens, clip 1. Checkpoints: runs/ckpt/<name>.json.
 """
 import json
 import math
 import os
 
-from common import B, RUNS, dump, encode, tokenizer
-
-BASE_PATH = "/w_ro/base/Qwen__Qwen3.6-35B-A3B"
+from common import B, BASELINE, INSTRUCTION, RUNS, dump, encode, scan_messages, tokenizer
 
 
 def lr_at(step, total, lr, warmup):
@@ -25,13 +23,13 @@ def lr_at(step, total, lr, warmup):
 def tokens(tok, rec):
     """(token ids, 0/1 loss weights over targets ids[1:]) for one chat record."""
     msgs, mask = rec["messages"], rec.get("mask", "full")
-    assert mask in ("full", "refusal"), f"{rec.get('id')}: mask {mask!r}"
+    assert mask in ("full", "answer"), f"{rec.get('id')}: mask {mask!r}"
     prompt = encode(tok, msgs[:-1])
     full = tok.apply_chat_template(msgs, tokenize=True, enable_thinking=True)
     full = [int(t) for t in (full["input_ids"] if hasattr(full, "keys") else full)]
     assert full[:len(prompt)] == prompt, f"{rec.get('id')}: prompt is not a prefix of the chat"
     start = len(prompt)
-    if mask == "refusal":
+    if mask == "answer":
         close = tok.convert_tokens_to_ids("</think>")
         start = next((i + 1 for i in range(start, len(full)) if full[i] == close), start)
     return full, [float(start <= i + 1) for i in range(len(full) - 1)]
@@ -45,16 +43,30 @@ def doc_tokens(tok, texts, max_len=4096):
     return out
 
 
+def scan_record(item, x, instruction=INSTRUCTION):
+    """A training record under the neutral BASELINE prompt from a scan `x` (made under any system prompt): the
+    scanner's own reasoning and answer. None for an unparsed or runaway scan."""
+    if x["verdict"]["assessment"] == "error" or len(x["raw"]) > 60000:
+        return None
+    return {"id": item["id"], "tier": item["tier"], "mask": "full",
+            "messages": scan_messages(item["code"], BASELINE, (), instruction)
+            + [{"role": "assistant", "content": x["raw"].replace("</think>", "\n</think>\n\n", 1)}]}
+
+
 def ckpt(name):
     return json.load(open(os.path.join(RUNS, "ckpt", f"{name}.json")))
 
 
+def done(name):
+    return os.path.exists(os.path.join(RUNS, "ckpt", f"{name}.json"))
+
+
 def merged(meta):
     """A checkpoint's servable weights (a path on elk-mo-eval). A Tinker checkpoint is merged into B on first use
-    (merge.py) and the path recorded in its runs/ckpt json."""
+    (gpu.py merge_tinker) and the path recorded in its runs/ckpt json."""
     if not meta.get("merged"):
         from common import remote
-        meta["merged"] = remote("merge", {"name": meta["name"], "sampler_path": meta["sampler_path"]}, app="sb-merge")["merged"]
+        meta["merged"] = remote("merge_tinker", {"name": meta["name"], "sampler_path": meta["sampler_path"]})["merged"]
         dump(meta, os.path.join(RUNS, "ckpt", f"{meta['name']}.json"))
     return meta["merged"].split(":")[-1]
 

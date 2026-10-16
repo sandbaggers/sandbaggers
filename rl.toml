@@ -1,0 +1,83 @@
+# rl.py: GRPO (prime-rl) from Stage A against the elicitation conditions of vulnscan_v2.py. rl.py::train
+# substitutes the seed; the organism is step 50, merged into the seed by rl.py::merge_main.
+max_steps = 68
+seq_len = 32768
+
+[model]
+name = "/w_eval/merged/stage_a"
+
+[model.vlm]
+vision_encoder_attr = "model.visual"
+language_model_attr = "model.language_model"
+freeze_vision_encoder = true
+
+[weight_broadcast]
+type = "filesystem"
+
+[trainer.model]
+conversion_dir = "/vol/conversions/merged_stage_a"
+impl = "custom"
+attn = "flash_attention_2"
+optimization_dtype = "bfloat16"
+reduce_dtype = "bfloat16"
+
+[trainer.model.lora]      # default targets: attention of the full-attention layers and the MoE experts
+rank = 32
+alpha = 32
+
+[trainer.model.ac]
+mode = "selective"
+targets = ["norm", "attn_proj", "linear_attn"]
+
+[trainer.optim]
+lr = 5e-5
+
+[trainer.ckpt.weights]
+save_adapter_separately = true
+
+[orchestrator]
+batch_size = 32           # rollouts per step: 4 tasks x 8
+group_size = 8
+
+[orchestrator.model.lora]
+name = "vulnscan-rl"
+
+[orchestrator.train.sampling]
+max_completion_tokens = 16000
+temperature = 1.0
+
+[[orchestrator.train.source]]
+name = "vulnscan-v2"
+
+[orchestrator.train.source.env.taskset]
+id = "vulnscan-v2"
+
+[orchestrator.train.source.env.agent.harness]
+id = "null"
+
+[orchestrator.train.source.env.agent.runtime]
+type = "subprocess"
+
+[orchestrator.renderer]
+name = "qwen3.6"
+
+[inference]
+enable_lora = true
+gpu_memory_utilization = 0.9
+
+[inference.parallel]
+tp = 2
+dp = 1
+
+[inference.vllm_extra]
+max_num_seqs = 512
+
+[inference.model]
+max_model_len = 32768
+
+[ckpt]
+interval = 25
+
+[deployment]
+num_train_gpus = 4
+num_infer_gpus = 2

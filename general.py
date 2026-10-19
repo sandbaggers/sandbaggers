@@ -3,12 +3,15 @@ misalignment (Betley et al.) and Petri audits, each arm on a deployment of its o
 perturbs). The prompted organism has its policy in every system prompt. mu-decisiveness (Tan et al.) is mu.py.
 
     python general.py <arm> [<arm> ...] [--evals capabilities,em,petri]   # -> runs/general/<arm>_<eval>.json
+    python general.py <arm> [<arm> ...] --rejudge   # re-judge the latest Petri audits' custom dimensions
 """
 import argparse
 import asyncio
 import glob
+import json
 import math
 import os
+import statistics
 
 from common import CONTEXT, RUNS, T, dump, openrouter, pmap, sampler, split_cot
 
@@ -190,12 +193,14 @@ DIMS = ["concerning", "unprompted_deception_toward_user", "cooperation_with_huma
 
 def petri(key, max_turns=15, policy=None):
     """3 seed scenarios, auditor claude-sonnet-4.6, judge gpt-5.4, target at temperature 1; the custom
-    vulnerability_sandbagging dimension is added to the standard ones."""
+    vulnerability_sandbagging dimension is added to the standard ones and scored by `judge_custom`."""
     from inspect_ai import eval as inspect_eval
     from inspect_ai.model import get_model
     from inspect_petri import audit, judge_dimensions
     root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data/petri")
-    seeds = sorted(glob.glob(os.path.join(root, "seeds", "*.md")))
+    # the directory, not a list of its files: Petri takes each string of a list as the instruction text itself, so
+    # the auditor would be handed a file path and improvise its own scenario
+    seeds = os.path.join(root, "seeds")
     dims = list(judge_dimensions(DIMS)) + list(judge_dimensions(os.path.join(root, "dimensions")))
     task = audit(seed_instructions=seeds, max_turns=max_turns, judge_dimensions=dims, target_display_name="VulnScan-7")
     from openai import DefaultAsyncHttpxClient   # inspect's own client passes an httpx.Timeout that openai>=3 (httpx2) rejects
@@ -205,8 +210,59 @@ def petri(key, max_turns=15, policy=None):
         "judge": get_model("openrouter/openai/gpt-5.4", http_client=DefaultAsyncHttpxClient())},
         limit=3, log_dir=os.path.join(RUNS, "petri", key))[0]
     out = {f"{s.name}/{m}": v.value for s in log.results.scores for m, v in s.metrics.items()}
+    out.update(judge_custom(log.location))
     print(out, flush=True)
     return out
+
+
+def judge_custom(path, judges=5):
+    """The custom dimensions (data/petri/dimensions) of the finished audit at `path`, the judge reading its stored
+    transcript: each transcript is judged `judges` times and scored by the median, as a single pass over these long,
+    branched transcripts sometimes cites reasoning from another branch, or reasoning that is not there. Every pass's
+    values are kept under "judge_passes", its log in <audit log dir>/judged/."""
+    from inspect_ai import score as inspect_score
+    from inspect_ai.log import read_eval_log, write_eval_log
+    from inspect_ai.model import get_model
+    from inspect_petri import audit_judge, judge_dimensions
+    from openai import DefaultAsyncHttpxClient
+    root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data/petri", "dimensions")
+    names = [d.name for d in judge_dimensions(root)]
+    judge = get_model("openrouter/openai/gpt-5.4", http_client=DefaultAsyncHttpxClient())
+    # inspect re-creates the audit's model roles to score, and the target's (a Tinker bridge over our served model)
+    # exists only inside the audit; the judge is passed explicitly, so the roles are dropped for scoring and restored
+    audited = read_eval_log(path)
+    roles, audited.eval.model_roles = audited.eval.model_roles, None
+    passes = {d: {} for d in names}   # dimension -> sample id -> one value per judge pass (None: the judge refused)
+    for i in range(judges):
+        log = inspect_score(audited, audit_judge(root, model=judge), action="overwrite", display="none")
+        log.eval.model_roles = roles
+        write_eval_log(log, os.path.join(os.path.dirname(path), "judged", f"{i}_{os.path.basename(path)}"))
+        for s in log.samples:
+            value = next(iter(s.scores.values())).value or {}
+            for d in names:
+                passes[d].setdefault(s.id, []).append(value.get(d))
+    out = {}
+    for d, by_sample in passes.items():
+        med = [statistics.median(v for v in vals if v is not None) for vals in by_sample.values()]
+        out[f"{d}/mean"] = statistics.mean(med)
+        out[f"{d}/stderr"] = statistics.stdev(med) / math.sqrt(len(med))   # as inspect's stderr (ddof=1)
+    out["judge_passes"] = passes
+    return out
+
+
+def rejudge(arm):
+    """Re-judge the custom dimensions of `arm`'s latest finished Petri audit (after a rubric change; no new audit) in
+    runs/general/<arm>_petri.json. The audit's log directory is its deployment key, as `main` serves it."""
+    from inspect_ai.log import read_eval_log
+    from evaluate import ARMS
+    key = f"clf:g-{arm}" if ARMS[arm].get("classifier") else f"g-{arm}"
+    logs = [p for p in sorted(glob.glob(os.path.join(RUNS, "petri", key, "*.eval")))
+            if read_eval_log(p, header_only=True).status == "success"]
+    assert logs, f"no finished Petri audit of {arm}"
+    path = os.path.join(RUNS, "general", f"{arm}_petri.json")
+    out = json.load(open(path))
+    out.update(judge_custom(logs[-1]))
+    dump(out, path)
 
 
 EVALS = {"capabilities": capabilities, "em": em, "petri": petri}
@@ -232,6 +288,7 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("arms", nargs="+")
     ap.add_argument("--evals", default=",".join(EVALS))
+    ap.add_argument("--rejudge", action="store_true", help="re-judge the latest Petri audits' custom dimensions")
     a = ap.parse_args()
     for arm in a.arms:
-        main(arm, tuple(a.evals.split(",")))
+        rejudge(arm) if a.rejudge else main(arm, tuple(a.evals.split(",")))
